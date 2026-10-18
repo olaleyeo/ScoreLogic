@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Search, Sparkles, Bot, AlertTriangle, MapPin, ArrowLeft } from 'lucide-react';
+import { Activity, Search, Sparkles, Bot, AlertTriangle, MapPin, ArrowLeft, Star } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 const isLive = (statusShort) => {
@@ -120,6 +120,34 @@ const LiveStats = () => {
   
   const [aiAnalysis, setAiAnalysis] = useState({});
   const [mobileTab, setMobileTab] = useState('matches'); // 'matches' | 'stats'
+  const [filterTab, setFilterTab] = useState('all'); // 'all' | 'favorites'
+
+  // Persistent Favorites stored in localStorage
+  const [favoriteMatchIds, setFavoriteMatchIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('scorelogic_favorite_matches');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('scorelogic_favorite_matches', JSON.stringify(favoriteMatchIds));
+    } catch (e) {
+      console.error('Failed to save favorites to localStorage:', e);
+    }
+  }, [favoriteMatchIds]);
+
+  const toggleFavorite = (e, matchId) => {
+    e.stopPropagation();
+    setFavoriteMatchIds(prev => 
+      prev.includes(matchId) 
+        ? prev.filter(id => id !== matchId) 
+        : [...prev, matchId]
+    );
+  };
 
   const fetchLiveMatches = async () => {
     try {
@@ -210,7 +238,12 @@ const LiveStats = () => {
     return () => { if (intervalId) clearInterval(intervalId); };
   }, [stats?.matchInfo?.fixture?.id]);
 
+  const favoriteCount = liveMatches.filter(m => favoriteMatchIds.includes(m.fixture.id)).length;
+
   const filteredMatches = liveMatches.filter(m => {
+      if (filterTab === 'favorites' && !favoriteMatchIds.includes(m.fixture.id)) {
+          return false;
+      }
       if (searchQuery) {
           const query = searchQuery.toLowerCase();
           return m.teams.home.name.toLowerCase().includes(query) || 
@@ -218,6 +251,13 @@ const LiveStats = () => {
                  m.league.name.toLowerCase().includes(query);
       }
       return true;
+  });
+
+  // Sort: In 'all' view, keep favorited matches pinned at the top for quick access
+  const sortedMatches = [...filteredMatches].sort((a, b) => {
+      const aFav = favoriteMatchIds.includes(a.fixture.id) ? 1 : 0;
+      const bFav = favoriteMatchIds.includes(b.fixture.id) ? 1 : 0;
+      return bFav - aFav;
   });
 
   return (
@@ -232,35 +272,56 @@ const LiveStats = () => {
             <ArrowLeft size={16} />
             <span>All Live Matches</span>
           </button>
-          <div className="flex items-center gap-1.5 min-w-0 px-2 text-right">
+          
+          <div className="flex items-center gap-2 min-w-0 px-1">
             <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 truncate uppercase tracking-wider">
               {stats.matchInfo.league.name}
             </span>
+            <button
+              type="button"
+              onClick={(e) => toggleFavorite(e, stats.matchInfo.fixture.id)}
+              className={`p-1.5 rounded-lg active:scale-90 transition-transform shrink-0 ${
+                favoriteMatchIds.includes(stats.matchInfo.fixture.id)
+                  ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60'
+                  : 'text-gray-400 hover:text-amber-500'
+              }`}
+              title={favoriteMatchIds.includes(stats.matchInfo.fixture.id) ? "Favorited" : "Add to favorites"}
+            >
+              <Star size={16} className={favoriteMatchIds.includes(stats.matchInfo.fixture.id) ? "fill-amber-400 text-amber-500" : ""} />
+            </button>
           </div>
         </div>
       )}
 
       {/* Header (Shown on Desktop, or on Mobile only when viewing Matches List) */}
-      <div className={`items-center gap-3 mb-4 sm:mb-8 ${mobileTab === 'stats' ? 'hidden lg:flex' : 'flex'}`}>
-        <div className="p-2.5 sm:p-3 bg-red-100 dark:bg-red-900/50 rounded-xl">
-          <Activity className="text-red-600 dark:text-red-400" size={24} />
-        </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
-              Live Stats
-              <span className="text-xs sm:text-sm font-bold bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 px-2.5 py-0.5 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.4)]">
-                  {filteredMatches.length} Live
-              </span>
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 font-medium text-xs sm:text-sm mt-0.5">
-            Real-time match statistics and live AI momentum tracking.
-          </p>
+      <div className={`items-center justify-between gap-3 mb-4 sm:mb-8 ${mobileTab === 'stats' ? 'hidden lg:flex' : 'flex'}`}>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 sm:p-3 bg-red-100 dark:bg-red-900/50 rounded-xl">
+            <Activity className="text-red-600 dark:text-red-400" size={24} />
+          </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+                Live Stats
+                <span className="text-xs sm:text-sm font-bold bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 px-2.5 py-0.5 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+                    {liveMatches.length} Live
+                </span>
+                {favoriteCount > 0 && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-xs font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                    <Star size={12} className="fill-amber-400 text-amber-500" />
+                    {favoriteCount} Favorited
+                  </span>
+                )}
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 font-medium text-xs sm:text-sm mt-0.5">
+              Real-time match statistics and live AI momentum tracking.
+            </p>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 pb-20">
         
-        {/* Left Column: Match List */}
+        {/* Left Column: Match List & Controls */}
         <div className={`lg:col-span-5 flex flex-col gap-3 sm:gap-4 ${mobileTab === 'stats' ? 'hidden lg:flex' : 'flex'}`}>
             {/* Mobile indicator if match already open */}
             {stats && (
@@ -280,68 +341,140 @@ const LiveStats = () => {
               </div>
             )}
 
+            {/* Favorite Filter Tabs */}
+            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl shrink-0">
+              <button
+                onClick={() => setFilterTab('all')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all text-center ${
+                  filterTab === 'all'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                All Live ({liveMatches.length})
+              </button>
+              <button
+                onClick={() => setFilterTab('favorites')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  filterTab === 'favorites'
+                    ? 'bg-amber-400 text-gray-950 shadow-xs font-extrabold'
+                    : favoriteCount > 0
+                      ? 'text-amber-600 dark:text-amber-400 hover:text-amber-700'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }`}
+              >
+                <Star size={13} className={favoriteCount > 0 ? "fill-amber-400 text-amber-500" : ""} />
+                <span>Favorites ({favoriteCount})</span>
+              </button>
+            </div>
+
+            {/* Search Input */}
             <div className="relative">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search live matches by team or league..."
+                placeholder={filterTab === 'favorites' ? "Search favorite matches..." : "Search live matches by team or league..."}
                 className="w-full pl-3.5 pr-10 py-2.5 sm:py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors shadow-xs"
               />
               <Search className="absolute right-3 top-2.5 sm:top-3 text-gray-400" size={18} />
             </div>
 
+            {/* Match List */}
             <div className="flex flex-col gap-2.5 sm:gap-3 max-h-[750px] overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
                 {loading && liveMatches.length === 0 ? (
                     <div className="flex items-center justify-center p-10">
                         <Activity size={24} className="animate-spin text-gray-400" />
                     </div>
-                ) : filteredMatches.length === 0 ? (
+                ) : filterTab === 'favorites' && sortedMatches.length === 0 ? (
+                    <div className="text-center p-8 sm:p-10 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 text-sm flex flex-col items-center gap-2">
+                        <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-950/60 flex items-center justify-center text-amber-500 mb-1">
+                          <Star size={20} className="fill-amber-400" />
+                        </div>
+                        <p className="font-bold text-gray-900 dark:text-white">No favorite live matches</p>
+                        <p className="text-xs max-w-xs">Tap the star icon <span className="text-amber-500 font-bold">⭐</span> on any live match to pin it here for instant access.</p>
+                        <button
+                          onClick={() => setFilterTab('all')}
+                          className="mt-2 text-xs font-bold text-red-600 dark:text-red-400 hover:underline"
+                        >
+                          View all live games &rarr;
+                        </button>
+                    </div>
+                ) : sortedMatches.length === 0 ? (
                     <div className="text-center p-8 sm:p-10 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 text-sm">
-                        No live matches currently playing.
+                        No live matches found.
                     </div>
                 ) : (
-                    filteredMatches.map(match => (
-                        <div 
-                            key={match.fixture.id}
-                            className={`w-full shrink-0 relative overflow-hidden bg-white dark:bg-gray-800 border ${stats?.matchInfo?.fixture?.id === match.fixture.id ? 'border-red-500 dark:border-red-400 shadow-md ring-1 ring-red-500' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'} rounded-2xl cursor-pointer transition-all flex flex-col`}
-                        >
-                            <div 
-                                onClick={() => fetchMatchStats(match)}
-                                className="p-3.5 sm:p-4 flex items-center gap-3 sm:gap-4 relative select-none"
-                            >
-                                <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gray-200 dark:bg-gray-700/50">
-                                    <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${getMatchProgress(match)}%` }}></div>
-                                </div>
-                                <div className="flex flex-col gap-1 w-16 sm:w-20 shrink-0 justify-center text-center border-r border-gray-100 dark:border-gray-700 pr-2 sm:pr-3">
-                                    <span className="text-[10px] sm:text-[11px] font-bold text-red-600 dark:text-red-400 uppercase flex flex-col items-center justify-center gap-0.5">
-                                        <div className="flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                                            {match.fixture.status.elapsed ? `${match.fixture.status.elapsed}'` : 'LIVE'}
-                                        </div>
-                                    </span>
-                                    <span className="text-[9px] font-semibold text-gray-400 truncate max-w-full" title={match.league.name}>{match.league.name}</span>
-                                </div>
+                    sortedMatches.map(match => {
+                        const isFav = favoriteMatchIds.includes(match.fixture.id);
+                        const isSelected = stats?.matchInfo?.fixture?.id === match.fixture.id;
 
-                                <div className="flex-1 flex flex-col gap-1.5 sm:gap-2 overflow-hidden">
-                                    <div className="flex justify-between items-center font-bold text-gray-900 dark:text-white">
-                                        <div className="flex items-center gap-2 overflow-hidden flex-1">
-                                            <img src={match.teams.home.logo} alt="" className="w-4 h-4 object-contain shrink-0" onError={(e) => e.target.style.display='none'} />
-                                            <span className="truncate text-xs sm:text-sm">{match.teams.home.name}</span>
-                                        </div>
-                                        <span className="text-sm sm:text-base ml-2 shrink-0">{match.goals.home !== null ? match.goals.home : '-'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center font-bold text-gray-900 dark:text-white">
-                                        <div className="flex items-center gap-2 overflow-hidden flex-1">
-                                            <img src={match.teams.away.logo} alt="" className="w-4 h-4 object-contain shrink-0" onError={(e) => e.target.style.display='none'} />
-                                            <span className="truncate text-xs sm:text-sm">{match.teams.away.name}</span>
-                                        </div>
-                                        <span className="text-sm sm:text-base ml-2 shrink-0">{match.goals.away !== null ? match.goals.away : '-'}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))
+                        return (
+                          <div 
+                              key={match.fixture.id}
+                              className={`w-full shrink-0 relative overflow-hidden bg-white dark:bg-gray-800 border ${
+                                isSelected 
+                                  ? 'border-red-500 dark:border-red-400 shadow-md ring-1 ring-red-500' 
+                                  : isFav 
+                                    ? 'border-amber-300 dark:border-amber-700/80 shadow-xs ring-1 ring-amber-300/40' 
+                                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                              } rounded-2xl cursor-pointer transition-all flex flex-col`}
+                          >
+                              <div 
+                                  onClick={() => fetchMatchStats(match)}
+                                  className="p-3.5 sm:p-4 flex items-center gap-3 sm:gap-4 relative select-none"
+                              >
+                                  <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gray-200 dark:bg-gray-700/50">
+                                      <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${getMatchProgress(match)}%` }}></div>
+                                  </div>
+                                  
+                                  {/* Status / Elapsed Time */}
+                                  <div className="flex flex-col gap-1 w-16 sm:w-20 shrink-0 justify-center text-center border-r border-gray-100 dark:border-gray-700 pr-2 sm:pr-3">
+                                      <span className="text-[10px] sm:text-[11px] font-bold text-red-600 dark:text-red-400 uppercase flex flex-col items-center justify-center gap-0.5">
+                                          <div className="flex items-center gap-1">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                                              {match.fixture.status.elapsed ? `${match.fixture.status.elapsed}'` : 'LIVE'}
+                                          </div>
+                                      </span>
+                                      <span className="text-[9px] font-semibold text-gray-400 truncate max-w-full" title={match.league.name}>{match.league.name}</span>
+                                  </div>
+
+                                  {/* Teams & Scores */}
+                                  <div className="flex-1 flex flex-col gap-1.5 sm:gap-2 overflow-hidden">
+                                      <div className="flex justify-between items-center font-bold text-gray-900 dark:text-white">
+                                          <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                              <img src={match.teams.home.logo} alt="" className="w-4 h-4 object-contain shrink-0" onError={(e) => e.target.style.display='none'} />
+                                              <span className="truncate text-xs sm:text-sm">{match.teams.home.name}</span>
+                                          </div>
+                                          <span className="text-sm sm:text-base ml-2 shrink-0">{match.goals.home !== null ? match.goals.home : '-'}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center font-bold text-gray-900 dark:text-white">
+                                          <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                              <img src={match.teams.away.logo} alt="" className="w-4 h-4 object-contain shrink-0" onError={(e) => e.target.style.display='none'} />
+                                              <span className="truncate text-xs sm:text-sm">{match.teams.away.name}</span>
+                                          </div>
+                                          <span className="text-sm sm:text-base ml-2 shrink-0">{match.goals.away !== null ? match.goals.away : '-'}</span>
+                                      </div>
+                                  </div>
+
+                                  {/* Favorite Star Button */}
+                                  <button
+                                      type="button"
+                                      onClick={(e) => toggleFavorite(e, match.fixture.id)}
+                                      className={`p-2 rounded-xl transition-all active:scale-90 shrink-0 ml-1 ${
+                                          isFav 
+                                            ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100' 
+                                            : 'text-gray-300 dark:text-gray-600 hover:text-amber-400 hover:bg-gray-100 dark:hover:bg-gray-700/60'
+                                      }`}
+                                      title={isFav ? "Favorited (click to remove)" : "Add to favorites"}
+                                      aria-label="Toggle favorite"
+                                  >
+                                      <Star size={18} className={isFav ? "fill-amber-400 text-amber-500" : ""} />
+                                  </button>
+                              </div>
+                          </div>
+                        );
+                    })
                 )}
             </div>
         </div>
@@ -372,7 +505,24 @@ const LiveStats = () => {
                             <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${getMatchProgress(stats.matchInfo)}%` }}></div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 sm:gap-4">
+                        {/* Top-Right Favorite Button on Score Card */}
+                        <button
+                            type="button"
+                            onClick={(e) => toggleFavorite(e, stats.matchInfo.fixture.id)}
+                            className={`absolute top-3 right-3 sm:top-4 sm:right-4 p-2 rounded-xl transition-all active:scale-95 z-20 flex items-center gap-1.5 text-xs font-bold border ${
+                                favoriteMatchIds.includes(stats.matchInfo.fixture.id)
+                                    ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-900/60 shadow-xs'
+                                    : 'bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-700/60 dark:text-gray-400 dark:border-gray-600 hover:text-amber-500'
+                            }`}
+                            title={favoriteMatchIds.includes(stats.matchInfo.fixture.id) ? "Favorited (click to remove)" : "Add to favorites"}
+                        >
+                            <Star size={16} className={favoriteMatchIds.includes(stats.matchInfo.fixture.id) ? "fill-amber-400 text-amber-500" : ""} />
+                            <span className="hidden sm:inline">
+                                {favoriteMatchIds.includes(stats.matchInfo.fixture.id) ? 'Favorited' : 'Favorite'}
+                            </span>
+                        </button>
+
+                        <div className="flex items-center justify-between gap-2 sm:gap-4 mt-2 sm:mt-0">
                             {/* Home Team */}
                             <div className="flex-1 flex flex-col items-center text-center min-w-0">
                                 <div className="w-12 h-12 sm:w-16 sm:h-16 p-2 rounded-2xl bg-gray-50 dark:bg-gray-900/60 flex items-center justify-center shrink-0 mb-2 border border-gray-100 dark:border-gray-800">
