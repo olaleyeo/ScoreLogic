@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: scorelogic
+    runtime: node
+    plan: free
+    buildCommand: npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend
+    startCommand: npm start --prefix backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_FOOTBALL_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CRON_TZ
+        value: Africa/Lagos
+      - key: DATABASE_URL
+        fromDatabase:
+          name: scorelogic-db
+          property: connectionString
+
+databases:
+  - name: scorelogic-db
+    plan: free
+    databaseName: scorelogic
+    user: scorelogic_user

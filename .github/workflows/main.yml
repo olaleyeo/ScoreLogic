@@ -1,0 +1,28 @@
+name: Daily Slip Generation
+
+on:
+  schedule:
+    - cron: '0 22 * * *' # Run at 10 PM daily
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  run-slip-generator:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run Background Worker
+        working-directory: ./backend
+        run: node node-cron-worker.js
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
