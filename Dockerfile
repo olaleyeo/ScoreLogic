@@ -1,7 +1,7 @@
 # ==========================================
 # Stage 1: Build Frontend Assets
 # ==========================================
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -13,7 +13,7 @@ RUN npm run build
 # ==========================================
 # Stage 2: Production Server
 # ==========================================
-FROM node:18-alpine
+FROM node:20-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
