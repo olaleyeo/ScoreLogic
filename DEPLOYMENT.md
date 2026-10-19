@@ -41,7 +41,7 @@ If you prefer to configure the Web Service manually on Render:
 3. Configure the following fields:
    - **Runtime**: `Node`
    - **Build Command**: `npm run build`
-   - **Start Command**: `npm start`
+   - **Start Command**: `npm run start:prod`
 4. Under **Environment Variables**, add:
    - `NODE_ENV` = `production`
    - `API_FOOTBALL_KEY` = `<your_api_football_key>`

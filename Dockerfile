@@ -31,4 +31,4 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 3000
 
-CMD ["npm", "start", "--prefix", "backend"]
+CMD ["npm", "run", "start:prod"]
