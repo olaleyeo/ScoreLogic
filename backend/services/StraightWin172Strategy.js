@@ -15,11 +15,13 @@ class StraightWin172Strategy {
             let selectedMarket = null;
             let marketOdds = null;
 
-            // Home odd 1.72-1.80 vs significantly bigger Away odd -> straight Home win (1)
-            // Using awayOdds >= 3.5 as "significantly bigger" for a 1.72+ home favourite
-            if (homeOdds >= 1.72 && homeOdds <= 1.80 && awayOdds >= 3.5) {
+            // Home or Away odd 1.72-2.00 vs significantly bigger opponent odd (confidence 50%+)
+            if (homeOdds >= 1.72 && homeOdds <= 2.00 && awayOdds >= 2.8) {
                 selectedMarket = 'Home Win';
                 marketOdds = homeOdds;
+            } else if (awayOdds >= 1.72 && awayOdds <= 2.00 && homeOdds >= 2.8) {
+                selectedMarket = 'Away Win';
+                marketOdds = awayOdds;
             }
 
             if (selectedMarket) {

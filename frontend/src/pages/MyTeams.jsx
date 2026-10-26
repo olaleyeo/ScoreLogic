@@ -1,8 +1,103 @@
 import React, { useState } from 'react';
-import { Users, Search, GripHorizontal, X } from 'lucide-react';
+import { Users, Search, GripHorizontal, X, Bot, Sparkles, Activity, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import teamLogos from '../assets/teamLogos.json';
 import { API_BASE_URL } from '../config';
+
+const formatAiText = (text) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    let inTable = false;
+    let tableLines = [];
+    const elements = [];
+    
+    lines.forEach((line, index) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('|')) {
+            inTable = true;
+            tableLines.push(line);
+        } else {
+            if (inTable) {
+                elements.push(
+                    <div key={`table-${index}`} className="font-mono text-xs bg-gray-50 dark:bg-gray-900/50 p-2.5 sm:p-3 rounded-lg overflow-x-auto my-2 border border-gray-200 dark:border-gray-700 shadow-inner whitespace-pre">
+                        {tableLines.join('\n')}
+                    </div>
+                );
+                inTable = false;
+                tableLines = [];
+            }
+            
+            if (!trimmed) {
+                elements.push(<div key={index} className="h-1.5" />);
+                return;
+            }
+
+            // Headings (#, ##, ###)
+            if (trimmed.startsWith('### ')) {
+                elements.push(
+                    <h4 key={index} className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider mt-2.5 mb-1">
+                        {trimmed.replace(/^###\s+/, '')}
+                    </h4>
+                );
+                return;
+            }
+            if (trimmed.startsWith('## ')) {
+                elements.push(
+                    <h3 key={index} className="text-xs sm:text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide mt-2.5 mb-1">
+                        {trimmed.replace(/^##\s+/, '')}
+                    </h3>
+                );
+                return;
+            }
+            if (trimmed.startsWith('# ')) {
+                elements.push(
+                    <h2 key={index} className="text-sm font-black text-gray-900 dark:text-white mt-3 mb-1.5">
+                        {trimmed.replace(/^#\s+/, '')}
+                    </h2>
+                );
+                return;
+            }
+
+            // Bullet points
+            const isBullet = trimmed.startsWith('- ') || trimmed.startsWith('* ');
+            const content = isBullet ? trimmed.replace(/^[-*]\s+/, '') : line;
+
+            // Format bold text **text**
+            const parts = content.split(/(\*\*.*?\*\*)/g);
+            const formattedLine = parts.map((part, pIdx) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                    return <strong key={pIdx} className="text-gray-900 dark:text-white font-bold">{part.slice(2, -2)}</strong>;
+                }
+                return part;
+            });
+            
+            if (isBullet) {
+                elements.push(
+                    <div key={index} className="flex items-start gap-1.5 text-xs py-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
+                        <span className="flex-1">{formattedLine}</span>
+                    </div>
+                );
+            } else {
+                elements.push(
+                    <div key={index} className="text-xs py-0.5 leading-relaxed">
+                        {formattedLine}
+                    </div>
+                );
+            }
+        }
+    });
+    
+    if (inTable) {
+        elements.push(
+            <div key={`table-end`} className="font-mono text-xs bg-gray-50 dark:bg-gray-900/50 p-2.5 sm:p-3 rounded-lg overflow-x-auto my-2 border border-gray-200 dark:border-gray-700 shadow-inner whitespace-pre">
+                {tableLines.join('\n')}
+            </div>
+        );
+    }
+    
+    return elements;
+};
 
 const MY_TEAMS = [
   "Arsenal", "Aston Villa", "Real Madrid", "Real Sociedad", "Barcelona", "Athletic Bilbao", "Bayern Munich", 
@@ -24,6 +119,7 @@ const MyTeams = () => {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [upcomingMatches, setUpcomingMatches] = useState([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState({});
 
   // Generated slip states
   const [isGenerating, setIsGenerating] = useState(false);
@@ -50,6 +146,39 @@ const MyTeams = () => {
       console.error('Error fetching matches:', err);
     } finally {
       setLoadingMatches(false);
+    }
+  };
+
+  const handleAiAnalysis = async (matchId, forceRetry = false) => {
+    if (!forceRetry && aiAnalysis[matchId]?.text) {
+      setAiAnalysis(prev => ({
+        ...prev,
+        [matchId]: {
+          ...prev[matchId],
+          expanded: !prev[matchId].expanded
+        }
+      }));
+      return;
+    }
+
+    setAiAnalysis(prev => ({
+      ...prev,
+      [matchId]: { loading: true, text: null, error: null, expanded: true }
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/matches/${matchId}/predict`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch AI analysis');
+      setAiAnalysis(prev => ({
+        ...prev,
+        [matchId]: { loading: false, text: data.analysis, error: null, expanded: true }
+      }));
+    } catch (err) {
+      setAiAnalysis(prev => ({
+        ...prev,
+        [matchId]: { loading: false, text: null, error: err.message, expanded: false }
+      }));
     }
   };
 
@@ -220,9 +349,18 @@ const MyTeams = () => {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-md max-h-[88vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl z-50 border border-gray-100 dark:border-gray-700"
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-lg sm:max-w-xl max-h-[88vh] overflow-y-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl z-50 border border-gray-100 dark:border-gray-700"
             >
-              <div className="p-5 sm:p-6 flex flex-col items-center">
+              <div className="p-5 sm:p-6 flex flex-col items-center relative">
+                <button 
+                  type="button"
+                  onClick={() => setSelectedTeam(null)}
+                  className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+
                 <div className="w-20 h-20 sm:w-24 sm:h-24 mb-3 sm:mb-4 rounded-full shadow-md overflow-hidden border-4 border-white dark:border-gray-700 shrink-0">
                   <img 
                     src={teamLogos[selectedTeam] || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedTeam)}&background=random&color=fff&bold=true&size=256&font-size=0.33`} 
@@ -240,19 +378,96 @@ const MyTeams = () => {
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
                     </div>
                   ) : upcomingMatches.length > 0 ? (
-                    <div className="space-y-2.5 max-h-[40vh] overflow-y-auto pr-1">
+                    <div className="space-y-3">
                       {upcomingMatches.map((match) => (
-                        <div key={match.id} className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-indigo-500 uppercase">{match.league}</span>
+                        <div key={match.id} className="bg-gray-50 dark:bg-gray-900/50 p-3.5 sm:p-4 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col transition-all">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide">{match.league}</span>
                             <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
                               {new Date(match.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center mt-1">
+                          <div className="flex justify-between items-center py-1">
                             <span className={`text-xs sm:text-sm ${match.home === selectedTeam ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-600 dark:text-gray-300'}`}>{match.home}</span>
-                            <span className="text-xs text-gray-400 mx-2">vs</span>
+                            <span className="text-xs text-gray-400 mx-2 font-medium">vs</span>
                             <span className={`text-xs sm:text-sm ${match.away === selectedTeam ? 'text-gray-900 dark:text-white font-bold' : 'text-gray-600 dark:text-gray-300'}`}>{match.away}</span>
+                          </div>
+
+                          {/* AI Insight Action / Card */}
+                          <div className="mt-2.5 pt-2 border-t border-gray-200/60 dark:border-gray-700/60">
+                            {!aiAnalysis[match.id]?.text && !aiAnalysis[match.id]?.loading && (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 text-xs font-semibold">
+                                  <Bot size={15} className="shrink-0" />
+                                  <span>AI Match Insight</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAiAnalysis(match.id);
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                                >
+                                  <Sparkles size={13} />
+                                  <span>Generate Insight</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {aiAnalysis[match.id]?.loading && (
+                              <div className="flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 py-2 font-medium">
+                                <Activity size={15} className="animate-spin shrink-0" />
+                                <span>Analyzing team form, tactics, and expected match flow...</span>
+                              </div>
+                            )}
+
+                            {aiAnalysis[match.id]?.error && (
+                              <div className="flex items-center justify-between text-xs text-red-500 bg-red-50 dark:bg-red-900/20 p-2.5 rounded-lg border border-red-100 dark:border-red-900/30">
+                                <div className="flex items-center gap-1.5">
+                                  <AlertTriangle size={14} className="shrink-0" />
+                                  <span>{aiAnalysis[match.id].error}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAiAnalysis(match.id, true);
+                                  }}
+                                  className="underline font-bold hover:text-red-700 ml-2 cursor-pointer"
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            )}
+
+                            {aiAnalysis[match.id]?.text && (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider">
+                                    <Bot size={15} className="shrink-0" />
+                                    <span>AI Match Insight</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAiAnalysis(match.id);
+                                    }}
+                                    className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold px-2 py-1 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer"
+                                  >
+                                    <span>{aiAnalysis[match.id].expanded ? 'Hide' : 'View'}</span>
+                                    {aiAnalysis[match.id].expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                  </button>
+                                </div>
+
+                                {aiAnalysis[match.id].expanded && (
+                                  <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40 text-xs text-gray-700 dark:text-gray-300 leading-relaxed max-h-64 overflow-y-auto space-y-1">
+                                    {formatAiText(aiAnalysis[match.id].text)}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -266,7 +481,7 @@ const MyTeams = () => {
 
                 <button 
                   onClick={() => setSelectedTeam(null)}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors text-xs sm:text-sm"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl transition-colors text-xs sm:text-sm cursor-pointer shadow-xs active:scale-98"
                 >
                   Close
                 </button>

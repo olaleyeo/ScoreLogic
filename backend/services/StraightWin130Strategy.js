@@ -15,10 +15,11 @@ class StraightWin130Strategy {
             let selectedMarket = null;
             let marketOdds = null;
 
-            if (homeOdds >= 1.30 && homeOdds <= 1.36 && awayOdds >= 8.0) {
+            // Favourites with odds 1.30 to 1.50 (confidence 66.7% - 76.9%)
+            if (homeOdds >= 1.30 && homeOdds <= 1.50 && awayOdds >= 3.5) {
                 selectedMarket = 'Home Win';
                 marketOdds = homeOdds;
-            } else if (awayOdds >= 1.30 && awayOdds <= 1.36 && homeOdds >= 8.0) {
+            } else if (awayOdds >= 1.30 && awayOdds <= 1.50 && homeOdds >= 3.5) {
                 selectedMarket = 'Away Win';
                 marketOdds = awayOdds;
             }

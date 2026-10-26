@@ -15,10 +15,11 @@ class StraightWinStrategy {
             let selectedMarket = null;
             let marketOdds = null;
 
-            if (homeOdds >= 1.22 && homeOdds <= 1.28 && awayOdds > 4.0) {
+            // Search criteria: 50% confidence and above (marketOdds between 1.20 and 2.00)
+            if (homeOdds >= 1.20 && homeOdds <= 2.00 && awayOdds >= 2.4) {
                 selectedMarket = 'Home Win';
                 marketOdds = homeOdds;
-            } else if (awayOdds >= 1.22 && awayOdds <= 1.28 && homeOdds > 4.0) {
+            } else if (awayOdds >= 1.20 && awayOdds <= 2.00 && homeOdds >= 2.4) {
                 selectedMarket = 'Away Win';
                 marketOdds = awayOdds;
             }

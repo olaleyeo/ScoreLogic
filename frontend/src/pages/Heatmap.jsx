@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { API_BASE_URL } from '../config';
+import ConfidenceFilter, { getNumericConfidence, getConfidenceTier } from '../components/ConfidenceFilter';
 
 const Heatmap = () => {
   const [predictions, setPredictions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPredIndex, setSelectedPredIndex] = useState(null);
+
+  // Confidence Filter states
+  const [minConfidence, setMinConfidence] = useState(0);
+  const [selectedConfidenceTiers, setSelectedConfidenceTiers] = useState([]);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/predictions?date=today`)
@@ -19,6 +24,80 @@ const Heatmap = () => {
         setLoading(false);
       });
   }, []);
+
+  const tierCounts = useMemo(() => {
+    const counts = {
+      all: predictions.length,
+      '50-59': 0,
+      '60-69': 0,
+      '70-79': 0,
+      '80+': 0
+    };
+    predictions.forEach(p => {
+      const tier = getConfidenceTier(p.confidence);
+      if (counts[tier] !== undefined) {
+        counts[tier]++;
+      }
+    });
+    return counts;
+  }, [predictions]);
+
+  const handleSliderChange = (newVal) => {
+    const val = Number(newVal);
+    setMinConfidence(val);
+
+    if (val > 0 && selectedConfidenceTiers.length > 0) {
+      const tierMaxValues = {
+        '50-59': 59.99,
+        '60-69': 69.99,
+        '70-79': 79.99,
+        '80+': 100
+      };
+      const highestSelectedTierMax = Math.max(
+        ...selectedConfidenceTiers.map(t => tierMaxValues[t] || 0)
+      );
+      if (val > highestSelectedTierMax) {
+        setSelectedConfidenceTiers([]);
+      }
+    }
+  };
+
+  const handleToggleTier = (tierId) => {
+    setSelectedConfidenceTiers(prev => {
+      const next = prev.includes(tierId)
+        ? prev.filter(t => t !== tierId)
+        : [...prev, tierId];
+
+      if (next.length > 0) {
+        const tierMinValues = {
+          '50-59': 50,
+          '60-69': 60,
+          '70-79': 70,
+          '80+': 80
+        };
+        const lowestSelectedMin = Math.min(...next.map(t => tierMinValues[t] || 0));
+        if (minConfidence > lowestSelectedMin) {
+          setMinConfidence(0);
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleResetConfidenceFilter = () => {
+    setMinConfidence(0);
+    setSelectedConfidenceTiers([]);
+  };
+
+  const displayedPredictions = predictions.filter(p => {
+    const conf = getNumericConfidence(p.confidence);
+    if (minConfidence > 0 && conf < minConfidence) return false;
+    if (selectedConfidenceTiers.length > 0) {
+      const tier = getConfidenceTier(p.confidence);
+      if (!selectedConfidenceTiers.includes(tier)) return false;
+    }
+    return true;
+  });
 
   const getHeatmapColor = (confidence) => {
     if (typeof confidence === 'string' && isNaN(Number(confidence))) {
@@ -47,8 +126,8 @@ const Heatmap = () => {
   }
 
   return (
-    <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 sm:mb-8">
+    <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Daily Prediction Heatmap</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 sm:hidden">Tap any card to view detailed match odds</p>
@@ -61,11 +140,34 @@ const Heatmap = () => {
         </div>
       </div>
 
+      {/* Confidence Filter Bar */}
+      <ConfidenceFilter
+        minConfidence={minConfidence}
+        onMinConfidenceChange={handleSliderChange}
+        selectedTiers={selectedConfidenceTiers}
+        onToggleTier={handleToggleTier}
+        onReset={handleResetConfidenceFilter}
+        tierCounts={tierCounts}
+        totalMatches={predictions.length}
+        filteredCount={displayedPredictions.length}
+      />
+
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-4">
         {predictions.length === 0 ? (
           <div className="col-span-full text-center text-gray-500 py-12 text-sm">No predictions found for today.</div>
+        ) : displayedPredictions.length === 0 ? (
+          <div className="col-span-full text-center text-gray-500 py-12 px-4 flex flex-col items-center">
+            <p className="font-bold text-sm mb-1 text-gray-800 dark:text-gray-200">No predictions match your confidence criteria</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Try adjusting the percentage dragger or selecting other confidence tiers.</p>
+            <button
+              onClick={handleResetConfidenceFilter}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              Reset Confidence Filter
+            </button>
+          </div>
         ) : (
-          predictions.map((pred, i) => (
+          displayedPredictions.map((pred, i) => (
             <motion.div 
               key={pred.matchId || i}
               initial={{ opacity: 0, scale: 0.8 }}

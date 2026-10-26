@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Filter, Copy, Share2, Save, Check, GripHorizontal, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { API_BASE_URL } from '../config';
+import ConfidenceFilter, { getNumericConfidence, getConfidenceTier, getConfidenceColor } from '../components/ConfidenceFilter';
 
 const Home = () => {
   const [matches, setMatches] = useState([]);
@@ -14,6 +15,10 @@ const Home = () => {
   const [leaguesParam, setLeaguesParam] = useState('');
   const [strategyParam, setStrategyParam] = useState('Over15');
   const [timeRangeParam, setTimeRangeParam] = useState('all');
+
+  // Confidence Filter states
+  const [minConfidence, setMinConfidence] = useState(0);
+  const [selectedConfidenceTiers, setSelectedConfidenceTiers] = useState([]);
   
   // Custom Slip Builder state
   const [selectedMatches, setSelectedMatches] = useState([]);
@@ -60,14 +65,100 @@ const Home = () => {
     }
   };
 
+  // Compute match count per confidence tier
+  const tierCounts = useMemo(() => {
+    const counts = {
+      all: matches.length,
+      '50-59': 0,
+      '60-69': 0,
+      '70-79': 0,
+      '80+': 0
+    };
+    matches.forEach(m => {
+      const tier = getConfidenceTier(m.confidence);
+      if (counts[tier] !== undefined) {
+        counts[tier]++;
+      }
+    });
+    return counts;
+  }, [matches]);
+
+  const handleSliderChange = (newVal) => {
+    const val = Number(newVal);
+    setMinConfidence(val);
+
+    // If dragger is moved above 0 and current selected tiers are all lower than the threshold,
+    // clear selected tiers so user can freely drag without conflict
+    if (val > 0 && selectedConfidenceTiers.length > 0) {
+      const tierMaxValues = {
+        '50-59': 59.99,
+        '60-69': 69.99,
+        '70-79': 79.99,
+        '80+': 100
+      };
+      const highestSelectedTierMax = Math.max(
+        ...selectedConfidenceTiers.map(t => tierMaxValues[t] || 0)
+      );
+      if (val > highestSelectedTierMax) {
+        setSelectedConfidenceTiers([]);
+      }
+    }
+  };
+
+  const handleToggleTier = (tierId) => {
+    setSelectedConfidenceTiers(prev => {
+      const next = prev.includes(tierId)
+        ? prev.filter(t => t !== tierId)
+        : [...prev, tierId];
+
+      // If user selected tiers below minConfidence, reset minConfidence so matches aren't blocked
+      if (next.length > 0) {
+        const tierMinValues = {
+          '50-59': 50,
+          '60-69': 60,
+          '70-79': 70,
+          '80+': 80
+        };
+        const lowestSelectedMin = Math.min(...next.map(t => tierMinValues[t] || 0));
+        if (minConfidence > lowestSelectedMin) {
+          setMinConfidence(0);
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleResetConfidenceFilter = () => {
+    setMinConfidence(0);
+    setSelectedConfidenceTiers([]);
+  };
+
   const getFilteredMatchesToRender = () => {
-      if (timeRangeParam === 'all') return matches;
-      const limitHours = parseInt(timeRangeParam, 10);
-      const limitTime = new Date().getTime() + (limitHours * 60 * 60 * 1000);
-      return matches.filter(m => {
-          if (!m.kickoffTime) return true;
-          return new Date(m.kickoffTime).getTime() <= limitTime;
-      });
+    return matches.filter(m => {
+      // 1. Time range filter
+      if (timeRangeParam !== 'all' && m.kickoffTime) {
+        const limitHours = parseInt(timeRangeParam, 10);
+        const limitTime = new Date().getTime() + (limitHours * 60 * 60 * 1000);
+        if (new Date(m.kickoffTime).getTime() > limitTime) return false;
+      }
+
+      const conf = getNumericConfidence(m.confidence);
+
+      // 2. Minimum Confidence Dragger (Slider)
+      if (minConfidence > 0 && conf < minConfidence) {
+        return false;
+      }
+
+      // 3. Include Tiers filter
+      if (selectedConfidenceTiers.length > 0) {
+        const tier = getConfidenceTier(m.confidence);
+        if (!selectedConfidenceTiers.includes(tier)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
   };
 
   const displayedMatches = getFilteredMatchesToRender();
@@ -141,22 +232,6 @@ const Home = () => {
     }
   };
 
-  const getConfidenceColor = (confidence) => {
-    if (typeof confidence === 'string') {
-        switch (confidence) {
-            case 'Very High': return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
-            case 'High': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
-            case 'Medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
-            case 'Low': return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
-            default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-        }
-    }
-    if (confidence >= 80) return 'bg-green-100 text-green-800';
-    if (confidence >= 60) return 'bg-blue-100 text-blue-800';
-    if (confidence >= 40) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
-  };
-
   const isJTLeague = (leagueName, strategy) => {
     if (strategy !== 'Over15') return false;
     if (!leagueName) return false;
@@ -208,9 +283,9 @@ const Home = () => {
             <option value="Over25">Over 2.5 Strategy</option>
             <option value="Under25">Under 2.5 Strategy</option>
             <option value="Under35">Under 3.5 Strategy</option>
-            <option value="StraightWin">Straight Win Strategy (1.22-1.28)</option>
-            <option value="StraightWin130">Straight Win Strategy (1.30-1.36)</option>
-            <option value="StraightWin172">Straight Win Strategy (1.72-1.80)</option>
+            <option value="StraightWin">Straight Win Strategy</option>
+            <option value="StraightWin130">Straight Win Strategy (1.30-1.50)</option>
+            <option value="StraightWin172">Straight Win Strategy (1.72-2.00)</option>
             <option value="DrawInHalf">Draw in Half Strategy</option>
           </select>
 
@@ -264,9 +339,21 @@ const Home = () => {
           </select>
         </div>
 
+        {/* Confidence Filter Component with Percentage Dragger & Include Tiers */}
+        <ConfidenceFilter
+          minConfidence={minConfidence}
+          onMinConfidenceChange={handleSliderChange}
+          selectedTiers={selectedConfidenceTiers}
+          onToggleTier={handleToggleTier}
+          onReset={handleResetConfidenceFilter}
+          tierCounts={tierCounts}
+          totalMatches={matches.length}
+          filteredCount={displayedMatches.length}
+        />
+
         <button
           onClick={handleApplyFilters}
-          className="w-full sm:w-auto self-end bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-sm active:scale-98 text-sm"
+          className="w-full sm:w-auto self-end bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-sm active:scale-98 text-sm cursor-pointer"
         >
           Find Matches
         </button>
@@ -285,7 +372,24 @@ const Home = () => {
         </div>
       )}
 
-      {!loading && !error && displayedMatches.length === 0 && (
+      {!loading && !error && matches.length > 0 && displayedMatches.length === 0 && (
+        <div className="text-center text-gray-500 dark:text-gray-400 py-16 px-4 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center">
+          <p className="font-bold text-base mb-1 text-gray-900 dark:text-white">No matches meet your confidence criteria</p>
+          <p className="text-sm max-w-md mb-4 text-gray-500 dark:text-gray-400">
+            {minConfidence > 0 ? `No matches with confidence ≥ ${minConfidence}%. ` : ''}
+            {selectedConfidenceTiers.length > 0 ? `No matches in selected tiers (${selectedConfidenceTiers.join(', ')}). ` : ''}
+            Try dragging the percentage dragger lower or selecting additional tiers.
+          </p>
+          <button
+            onClick={handleResetConfidenceFilter}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+          >
+            Reset Confidence Filter
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && matches.length === 0 && (
         <div className="text-center text-gray-500 dark:text-gray-400 py-16 px-4 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
           <p className="font-semibold text-base mb-1">No matches found</p>
           <p className="text-sm">Try selecting a different strategy or date to view upcoming games.</p>

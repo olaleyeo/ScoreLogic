@@ -19,6 +19,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# Copy root package files so package.json exists in /app
+COPY package*.json ./
+
 # Install backend dependencies
 COPY backend/package*.json ./backend/
 RUN npm ci --prefix backend --omit=dev
@@ -31,4 +34,4 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "backend/server.js"]

@@ -39,9 +39,9 @@ If you prefer to configure the Web Service manually on Render:
 1. Click **New +** > **Web Service**.
 2. Connect your GitHub repository.
 3. Configure the following fields:
-   - **Runtime**: `Node`
-   - **Build Command**: `npm run build`
-   - **Start Command**: `npm run start:prod`
+   - **Runtime**: `Docker` (automatically uses root `Dockerfile`) OR `Node`
+   - **Build Command** (if Node): `npm run install:all && npm run build`
+   - **Start Command** (if Node): `node backend/server.js` (or `npm run start:prod`)
 4. Under **Environment Variables**, add:
    - `NODE_ENV` = `production`
    - `API_FOOTBALL_KEY` = `<your_api_football_key>`

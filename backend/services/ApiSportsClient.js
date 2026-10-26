@@ -137,14 +137,18 @@ class ApiSportsClient {
             const htGoalsMarket = findMarket(12, 'goals over/under first half');
             const shGoalsMarket = findMarket(13, 'goals over/under second half');
 
-            if (!exactScoreMarket) continue;
+            // Require at least one key market (Exact Score, Over/Under, or Match Winner)
+            if (!exactScoreMarket && !overUnderMarket && !matchWinnerMarket) continue;
 
-            // Find 0:0 odds
-            const zeroZeroOutcome = exactScoreMarket.values.find(v => v.value === '0:0' || v.value === '0-0');
-            if (!zeroZeroOutcome) continue;
-
-            const zeroZeroOdds = parseFloat(zeroZeroOutcome.odd);
-            if (isNaN(zeroZeroOdds)) continue;
+            // Find 0:0 odds if exact score market exists
+            let zeroZeroOdds = null;
+            if (exactScoreMarket && exactScoreMarket.values) {
+                const zeroZeroOutcome = exactScoreMarket.values.find(v => v.value === '0:0' || v.value === '0-0');
+                if (zeroZeroOutcome) {
+                    const parsed = parseFloat(zeroZeroOutcome.odd);
+                    if (!isNaN(parsed)) zeroZeroOdds = parsed;
+                }
+            }
 
             // Find Goals Over/Under market (Market ID: 5)
             const marketOdds = {};
