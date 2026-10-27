@@ -696,75 +696,117 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
         }
 
         const TEAM_ALIASES = {
-            'man city': ['manchester city', 'man city'],
-            'ac milan': ['ac milan', 'milan'],
-            'inter': ['inter', 'inter milan', 'internazionale'],
-            'sporting': ['sporting cp', 'sporting lisbon'],
+            'arsenal': ['arsenal'],
+            'aston villa': ['aston villa'],
+            'real madrid': ['real madrid'],
+            'real sociedad': ['real sociedad'],
+            'barcelona': ['barcelona', 'fc barcelona'],
             'athletic bilbao': ['athletic club', 'athletic bilbao'],
+            'bayern munich': ['bayern munich', 'bayern münchen', 'fc bayern munich'],
+            'stuttgart': ['vfb stuttgart', 'stuttgart'],
+            'ac milan': ['ac milan', 'milan'],
+            'venezia': ['venezia'],
+            'crystal palace': ['crystal palace'],
+            'man city': ['manchester city', 'man city'],
+            'rio ave': ['rio ave'],
+            'sporting': ['sporting cp', 'sporting lisbon'],
+            'sv 07 elversberg': ['elversberg', 'sv 07 elversberg', 'sv elversberg'],
+            'bayer leverkusen': ['bayer leverkusen', 'leverkusen'],
+            'bournemouth': ['bournemouth', 'afc bournemouth'],
+            'everton': ['everton'],
+            'celtic': ['celtic'],
             'falkirk fc': ['falkirk', 'falkirk fc'],
-            'galatasaray istanbul': ['galatasaray'],
-            'fenerbahce istanbul': ['fenerbahce', 'fenerbahçe'],
-            'goztepe izmir': ['goztepe', 'göztepe'],
-            'fc twente enschede': ['twente', 'fc twente'],
+            'lens': ['lens', 'rc lens'],
+            'strasbourg': ['strasbourg', 'rc strasbourg'],
+            'tottenham': ['tottenham', 'tottenham hotspur'],
+            'newcastle': ['newcastle', 'newcastle united'],
+            'borussia dortmund': ['borussia dortmund', 'dortmund'],
+            'hamburger sv': ['hamburger sv', 'hamburg'],
+            'galatasaray istanbul': ['galatasaray', 'galatasaray istanbul'],
+            'goztepe izmir': ['goztepe', 'göztepe', 'goztepe izmir'],
+            'lyon': ['lyon', 'olympique lyonnais'],
+            'le havre': ['le havre'],
+            'sevilla': ['sevilla'],
+            'atletico madrid': ['atletico madrid', 'atlético madrid'],
+            'fc utrecht': ['utrecht', 'fc utrecht'],
+            'psv eindhoven': ['psv eindhoven', 'psv'],
+            'feyenoord': ['feyenoord'],
+            'ado den haag': ['ado den haag', 'den haag'],
+            'chelsea': ['chelsea'],
+            'brighton': ['brighton', 'brighton & hove albion'],
+            'sc telstar': ['telstar', 'sc telstar'],
+            'ajax': ['ajax', 'afc ajax'],
+            'malaga cf': ['malaga', 'málaga', 'malaga cf'],
+            'sc cambuur': ['cambuur', 'sc cambuur'],
+            'fc twente enschede': ['twente', 'fc twente', 'fc twente enschede'],
+            'samsunspor': ['samsunspor'],
+            'fenerbahce istanbul': ['fenerbahce', 'fenerbahçe', 'fenerbahce istanbul'],
+            'cagliari': ['cagliari'],
+            'inter': ['inter', 'inter milan', 'internazionale'],
+            'rayo vallecano': ['rayo vallecano'],
+            'sk rapid': ['rapid vienna', 'rapid wien', 'sk rapid'],
+            'strum graz': ['sturm graz', 'sk sturm graz'],
+            'salzburg': ['red bull salzburg', 'rb salzburg', 'salzburg'],
+            'fk austria wien': ['austria vienna', 'austria wien', 'fk austria wien'],
+            'gent': ['gent', 'kaa gent'],
+            'club brugge': ['club brugge', 'club brugge kv'],
+            'union gilloise': ['union st. gilloise', 'union saint-gilloise', 'union gilloise'],
+            'rsc anderlecht': ['anderlecht', 'rsc anderlecht'],
+            'kvc westerlo': ['westerlo', 'kvc westerlo'],
+            'sv zulte waregem': ['zulte waregem', 'sv zulte waregem'],
+            'fk spartak 1918': ['spartak varna', 'fk spartak 1918', 'spartak 1918'],
+            'ludogorets': ['ludogorets', 'ludogorets razgrad'],
+            'nk istra 1961': ['istra 1961', 'nk istra 1961'],
             'gnk dinamo zagreb': ['dinamo zagreb', 'gnk dinamo zagreb'],
             'sparta pargue': ['sparta praha', 'sparta prague'],
             'slavia prague': ['slavia praha', 'slavia prague'],
-            'strum graz': ['sturm graz', 'sk sturm graz'],
-            'sk rapid': ['rapid vienna', 'rapid wien', 'sk rapid'],
-            'bodo/gimit': ['bodo/glimt', 'bodø/glimt'],
-            'alkmaar': ['az alkmaar', 'az'],
-            'academico de viseu': ['academico viseu', 'académico de viseu', 'academico de viseu'],
+            'viborg ff': ['viborg', 'viborg ff'],
+            'ac horsens': ['horsens', 'ac horsens'],
+            'silkeborg if': ['silkeborg', 'silkeborg if'],
+            'fc midtjylland': ['midtjylland', 'fc midtjylland'],
+            'nordsjaelland': ['nordsjaelland', 'fc nordsjaelland'],
             'broendby if': ['brondby', 'brøndby', 'broendby if'],
+            'alkmaar': ['az alkmaar', 'az'],
+            'go ahead eagles': ['go ahead eagles'],
+            'bodo/gimit': ['bodo/glimt', 'bodø/glimt'],
+            'rosenborg': ['rosenborg'],
             'tromsoe il': ['tromso', 'tromsø', 'tromsoe il'],
-            'union gilloise': ['union st. gilloise', 'union saint-gilloise', 'union gilloise'],
-            'fk spartak 1918': ['spartak varna', 'fk spartak 1918']
+            'sarpsborg 08': ['sarpsborg 08', 'sarpsborg'],
+            'academico de viseu': ['academico viseu', 'académico de viseu', 'academico de viseu'],
+            'porto': ['fc porto', 'porto'],
+            'aberdeen': ['aberdeen'],
+            'rangers': ['rangers', 'rangers fc'],
+            'valencia': ['valencia'],
+            'betis': ['real betis', 'betis'],
+            'lask linz': ['lask', 'lask linz']
         };
 
-        const NON_EUROPEAN_COUNTRIES = new Set([
-            'brazil', 'argentina', 'chile', 'colombia', 'ecuador', 'uruguay',
-            'peru', 'paraguay', 'bolivia', 'venezuela', 'mexico', 'usa', 'finland', 'romania'
+        const ALLOWED_COUNTRIES = new Set([
+            'england', 'spain', 'germany', 'italy', 'france', 'portugal',
+            'netherlands', 'scotland', 'turkey', 'austria', 'belgium',
+            'bulgaria', 'croatia', 'czech-republic', 'czechia', 'denmark',
+            'norway', 'world', 'europe', ''
         ]);
 
-        const expandedTargets = [];
+        const exactTargetSet = new Set();
         trackedTeams.forEach(raw => {
             const lower = raw.toLowerCase().trim();
             if (TEAM_ALIASES[lower]) {
-                expandedTargets.push(...TEAM_ALIASES[lower]);
+                TEAM_ALIASES[lower].forEach(alias => exactTargetSet.add(alias));
             } else {
-                expandedTargets.push(lower);
+                exactTargetSet.add(lower);
             }
         });
-
-        const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const targetRegexes = expandedTargets.map(t => ({
-            target: t,
-            regex: new RegExp(`(^|[^a-z0-9])${escapeRegex(t)}([^a-z0-9]|$)`, 'i')
-        }));
 
         const isTrackedTeam = (name, country = '') => {
             if (!name) return false;
             const lower = name.toLowerCase().trim();
             const countryLower = (country || '').toLowerCase().trim();
 
-            // Exclude youth, reserve, women's, and B teams
+            if (!ALLOWED_COUNTRIES.has(countryLower)) return false;
             if (/\b(u18|u19|u20|u21|u23|ii|b|reserves|women|w)\b/i.test(lower)) return false;
 
-            // All tracked teams in MY_TEAMS are European clubs from specific leagues
-            if (NON_EUROPEAN_COUNTRIES.has(countryLower)) return false;
-
-            // Avoid false-positive namesakes
-            if (lower.includes('cove rangers') || lower.includes('queens park rangers') || lower.includes('sporting gijon') || lower.includes('barcelona sc') || lower.includes('inter turku') || lower.includes('inter miami')) {
-                return false;
-            }
-
-            return targetRegexes.some(({ target, regex }) => {
-                if (lower === target) return true;
-                // Strict exact match for short/ambiguous names like 'inter', 'az', 'rangers', 'barcelona', 'chelsea', 'arsenal'
-                if (['inter', 'az', 'rangers', 'barcelona', 'porto', 'gent', 'lens', 'lyon'].includes(target)) {
-                    return lower === target || lower === `fc ${target}` || lower === `${target} fc` || lower === `rc ${target}` || lower === `olympique ${target}` || lower === `kaa ${target}`;
-                }
-                return regex.test(lower);
-            });
+            return exactTargetSet.has(lower);
         };
 
         let all14DayFixtures = [];
@@ -891,40 +933,61 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             console.error('Vault lookup warning:', err.message);
         }
 
-        // Enrich top candidates (up to 36 fixtures with live stats/injuries to stay fast, rest still get full schedule + AI evaluation)
-        const maxLiveEnrich = Math.min(candidates.length, 30);
-        if (apiKey && apiKey !== 'your_api_key_here') {
-            for (let i = 0; i < maxLiveEnrich; i += 6) {
-                const slice = candidates.slice(i, i + 6);
-                await Promise.all(
-                    slice.map(c => this.fetchFixtureEnrichmentCached(String(c.fixture.id), apiKey))
-                );
-            }
+        // Prioritize fixtures that have published bookmaker odds in VaultMatch or are the next upcoming fixture per team (cap at 42 fixtures so Groq responds in <5s without hitting 8k TPM limits)
+        const teamCountMap = new Map();
+        const prioritizedCandidates = [];
+        const sortedForSelection = [...candidates].sort((a, b) => {
+            const aHasVault = vaultOddsMap.has(String(a.fixture.id)) ? 1 : 0;
+            const bHasVault = vaultOddsMap.has(String(b.fixture.id)) ? 1 : 0;
+            if (bHasVault !== aHasVault) return bHasVault - aHasVault;
+            return new Date(a.fixture.date) - new Date(b.fixture.date);
+        });
+
+        for (const item of sortedForSelection) {
+            if (prioritizedCandidates.length >= 42) break;
+            const hKey = (item.teams?.home?.name || '').toLowerCase();
+            const aKey = (item.teams?.away?.name || '').toLowerCase();
+            const hCount = teamCountMap.get(hKey) || 0;
+            const aCount = teamCountMap.get(aKey) || 0;
+            if (hCount >= 2 && aCount >= 2) continue;
+            prioritizedCandidates.push(item);
+            teamCountMap.set(hKey, hCount + 1);
+            teamCountMap.set(aKey, aCount + 1);
+        }
+
+        // Enrich top 6 uncached fixtures in parallel (fast 2.5s timeout so request never hangs)
+        const uncachedTop = prioritizedCandidates
+            .filter(c => !this.enrichmentCache[String(c.fixture.id)])
+            .slice(0, 6);
+        if (apiKey && apiKey !== 'your_api_key_here' && uncachedTop.length > 0) {
+            await Promise.allSettled(
+                uncachedTop.map(c => this.fetchFixtureEnrichmentCached(String(c.fixture.id), apiKey))
+            );
         }
 
         // Build rich context objects for each candidate match
         const getScheduleContext = (teamName, currentFixtureId, currentDateStr) => {
             const sched = teamScheduleMap.get((teamName || '').toLowerCase()) || [];
             const idx = sched.findIndex(s => s.id === String(currentFixtureId));
-            if (idx === -1) return 'No adjacent fixtures in 14-day window';
+            if (idx === -1) return 'Full rest';
             const currTime = new Date(currentDateStr).getTime();
             const parts = [];
             if (idx > 0) {
                 const prev = sched[idx - 1];
                 const daysSince = Math.round((currTime - new Date(prev.date).getTime()) / (1000 * 3600 * 24));
-                const opp = prev.home.toLowerCase() === teamName.toLowerCase() ? `vs ${prev.away} (H)` : `@ ${prev.home} (A)`;
-                parts.push(`Previous game: ${daysSince}d before (${prev.league} ${opp})`);
+                const opp = prev.home.toLowerCase() === teamName.toLowerCase() ? `vs ${prev.away}` : `@ ${prev.home}`;
+                parts.push(`Prev:${daysSince}d ago(${prev.league} ${opp})`);
             }
             if (idx < sched.length - 1) {
                 const next = sched[idx + 1];
                 const daysUntil = Math.round((new Date(next.date).getTime() - currTime) / (1000 * 3600 * 24));
-                const opp = next.home.toLowerCase() === teamName.toLowerCase() ? `vs ${next.away} (H)` : `@ ${next.home} (A)`;
-                parts.push(`Upcoming game: ${daysUntil}d after (${next.league} ${opp})`);
+                const opp = next.home.toLowerCase() === teamName.toLowerCase() ? `vs ${next.away}` : `@ ${next.home}`;
+                parts.push(`Next:in ${daysUntil}d(${next.league} ${opp})`);
             }
-            return parts.length > 0 ? parts.join(' | ') : 'Single fixture in 14-day window (full rest, low rotation risk)';
+            return parts.length > 0 ? parts.join(' | ') : 'Full rest';
         };
 
-        const preparedMatches = candidates.map(item => {
+        const preparedMatches = prioritizedCandidates.map(item => {
             const matchId = String(item.fixture.id);
             const homeTeam = item.teams.home.name;
             const awayTeam = item.teams.away.name;
@@ -972,55 +1035,52 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
                 round,
                 kickoffTime,
                 zeroZeroOdds: vaultMatch?.correctScoreOdds?.['0:0'] || item._zeroZeroOdds || null,
-                homeForm: enrich.homeForm || 'Use current season knowledge',
-                awayForm: enrich.awayForm || 'Use current season knowledge',
-                homeRecord: enrich.homeRecord || 'Use current season home record',
-                awayRecord: enrich.awayRecord || 'Use current season away record',
-                homeGoals: enrich.homeGoals || 'Use current season goals scored/conceded',
-                awayGoals: enrich.awayGoals || 'Use current season goals scored/conceded',
-                h2hSummary: enrich.h2hSummary || 'Use recent H2H knowledge',
-                injuriesAndSuspensions: enrich.injuriesAndSuspensions || 'Check known first-team injuries & suspensions',
+                homeForm: enrich.homeForm || 'N/A',
+                awayForm: enrich.awayForm || 'N/A',
+                homeRecord: enrich.homeRecord || 'N/A',
+                awayRecord: enrich.awayRecord || 'N/A',
+                homeGoals: enrich.homeGoals || 'N/A',
+                awayGoals: enrich.awayGoals || 'N/A',
+                h2hSummary: enrich.h2hSummary || 'N/A',
+                injuriesAndSuspensions: enrich.injuriesAndSuspensions || 'Check squad knowledge',
                 homeSchedule: getScheduleContext(homeTeam, matchId, kickoffTime),
                 awaySchedule: getScheduleContext(awayTeam, matchId, kickoffTime),
                 availableOdds
             };
         });
 
-        // Evaluate in batches of 12 with Groq AI so JSON output is never truncated and evaluations are thorough
+        // Disable groq-sdk 30s internal retry backoff so model fallback is instantaneous on 429
         const Groq = require('groq-sdk');
-        const groq = new Groq({ apiKey: groqKey });
+        const groq = new Groq({ apiKey: groqKey, maxRetries: 0, timeout: 14000 });
+        const GROQ_MODELS = [
+            'llama-3.3-70b-versatile',
+            'openai/gpt-oss-120b',
+            'openai/gpt-oss-20b',
+            'llama-3.1-8b-instant'
+        ];
 
-        const evaluateBatch = async (batch) => {
+        const evaluateBatch = async (batch, batchIdx) => {
             const matchDescriptions = batch.map((m, i) => {
                 const oddsStr = Object.keys(m.availableOdds).length > 0
                     ? JSON.stringify(m.availableOdds)
-                    : 'Not yet published by bookmaker (estimate realistic market odds)';
-                return [
-                    `MATCH #${i + 1} [matchId: "${m.matchId}"]`,
-                    `Fixture: ${m.homeTeam} (Home) vs ${m.awayTeam} (Away)`,
-                    `Competition & Round/Importance: ${m.league} - ${m.round}`,
-                    `Kickoff: ${m.kickoffTime}`,
-                    `Home Record & Form: ${m.homeRecord} | Recent Form: ${m.homeForm} | ${m.homeGoals}`,
-                    `Away Record & Form: ${m.awayRecord} | Recent Form: ${m.awayForm} | ${m.awayGoals}`,
-                    `Recent H2H: ${m.h2hSummary}`,
-                    `First-Team Injuries & Suspensions: ${m.injuriesAndSuspensions}`,
-                    `Home Schedule / Rotation Context: ${m.homeSchedule}`,
-                    `Away Schedule / Rotation Context: ${m.awaySchedule}`,
-                    `Available Bookmaker Odds: ${oddsStr}`
-                ].join('\n');
-            }).join('\n\n---\n\n');
+                    : 'Estimate realistic odds';
+                const statsLine = m.homeRecord !== 'N/A'
+                    ? ` | H:${m.homeRecord}(${m.homeGoals}) A:${m.awayRecord}(${m.awayGoals}) Inj:${m.injuriesAndSuspensions}`
+                    : '';
+                return `#${i + 1} [matchId:"${m.matchId}"] ${m.homeTeam} vs ${m.awayTeam} (${m.league} - ${m.round}, ${m.kickoffTime.split('T')[0]}) | H_Sched:${m.homeSchedule} | A_Sched:${m.awaySchedule} | Odds:${oddsStr}${statsLine}`;
+            }).join('\n');
 
-            const systemPrompt = `You are an elite, strict institutional football betting analyst and quantitative modeler.
-Your job is to evaluate upcoming matches for a curated 14-day betting slip and ONLY approve high-conviction picks after strictly weighing ALL of the following parameters:
-1. Goals Scored & Goals Conceded: Home vs Away offensive output, xG, defensive solidity, clean sheet rates, and concession streaks.
-2. Corners Profile: Wing play, shot volume, set-piece pressure, average corners won and conceded by both sides.
-3. Home Records vs Away Records: Specific dominance at home vs vulnerability or counter-attacking strength on the road.
-4. Underdog Dynamics: Whether the underdog is dangerous (giant-killer, strong low block, high motivation) making a straight win a trap.
-5. First-Team Injuries & Suspensions: Impact of missing key first-team starters (strikers, playmakers, center-backs, goalkeepers).
-6. Importance of the Game: Title race, European qualification, relegation battle, cup tie, derby intensity, or dead rubber.
-7. Upcoming Game & Manager Rotation: Look closely at the Home/Away Schedule Context. If a team has a massive Champions League, Europa League, cup knockout, or top-of-the-table clash within 3-4 days, account for the manager resting key first-team players!
+            const systemPrompt = `You are a strict quantitative football betting analyst.
+Evaluate each match by strictly considering ALL of:
+1. Goals Scored & Goals Conceded (home/away averages)
+2. Corners Profile (wing play, shot volume, expected corners for both teams)
+3. Home Records vs Away Records
+4. Underdog Dynamics (giant-killing threat, low-block resilience, trap games)
+5. First-Team Injuries & Suspensions (impact of missing key starters)
+6. Importance of the Game (title race, European spots, relegation battle, cup tie, derby)
+7. Upcoming Game & Manager Rotation (check H_Sched & A_Sched: if a team has a Champions League, Europa League, cup knockout, or major clash within 3-4 days, account for managers resting first-team players!).
 
-ALLOWED BETTING MARKETS (You MUST NOT limit picks to Over 1.5! Choose the single best market for each match across all categories):
+ALLOWED MARKETS (Strictly diversify picks across these categories based on each match's best edge — DO NOT default everything to Over 1.5!):
 - "Home Win"
 - "Away Win"
 - "Over 1.5"
@@ -1036,84 +1096,78 @@ ALLOWED BETTING MARKETS (You MUST NOT limit picks to Over 1.5! Choose the single
 - "Under 9.5 Corners"
 - "Under 10.5 Corners"
 
-STRICT SELECTION RULES:
-- For every match, select the single market with the highest true probability and value after factoring in rotation, injuries, home/away records, underdog threat, and game importance.
-- Diversify markets naturally based on each match's tactical profile (use Home Win, Away Win, Over/Under goals, BTTS - Yes/No, and Expected Corners markets where appropriate).
-- Assign an integer "confidence" from 50 to 98.
-- Set "includeInSlip": true ONLY if the match passes strict evaluation with high confidence (typically confidence >= 72 and no severe unpredictable rotation/injury trap). If a game is too unpredictable, set "includeInSlip": false.
-- Return ONLY valid JSON with a top-level "evaluations" array.`;
+RULES:
+- Select a varied mix of Home Win, Away Win, Over/Under, BTTS - Yes/No, and Expected Corners markets where each fits best.
+- For each match in the batch, pick its single strongest market and assign confidence (70-96). Set includeInSlip: true for all matches where your selected market has confidence >= 72 (typically 8-12 matches per batch).
+- Output strictly valid JSON: {"evaluations": [...]}.`;
 
-            const userPrompt = `Strictly evaluate the following ${batch.length} upcoming matches and return a JSON object with an "evaluations" array.
-Each item in "evaluations" MUST have this exact structure:
+            const userPrompt = `Evaluate these ${batch.length} matches and return JSON {"evaluations": [ ... ]} where each approved pick has:
 {
-  "matchId": "string (must match the input matchId)",
-  "includeInSlip": boolean,
-  "selectedMarket": "one of the allowed markets (Home Win, Away Win, Over 1.5, Over 2.5, Under 2.5, Under 3.5, BTTS - Yes, BTTS - No, Over 8.5 Corners, Over 9.5 Corners, Over 10.5 Corners, Under 9.5 Corners, Under 10.5 Corners)",
-  "marketOdds": number (use bookmaker odd if provided for that market, otherwise a realistic decimal odd between 1.22 and 2.35),
-  "confidence": number (integer 50-98 representing strict AI confidence percentage),
-  "expectedCorners": "string e.g. 'Home 6.5 - Away 3.5 (Total: 10.0)'",
+  "matchId": "string (exact matchId from input)",
+  "includeInSlip": true,
+  "selectedMarket": "Home Win | Away Win | Over 1.5 | Over 2.5 | Under 2.5 | Under 3.5 | BTTS - Yes | BTTS - No | Over 8.5 Corners | Over 9.5 Corners | Over 10.5 Corners | Under 9.5 Corners | Under 10.5 Corners",
+  "marketOdds": number,
+  "confidence": number (72-96),
+  "expectedCorners": "Home X.X - Away Y.Y (Total: Z.Z)",
   "rotationRisk": "Low" | "Medium" | "High",
-  "gameImportance": "short string e.g. 'High - League Title Race' or 'Cup Rotation Risk'",
-  "reasoning": "2 concise sentences explaining how goals scored/conceded, home/away records, underdog factor, injuries/suspensions, game importance, corners, and upcoming-game rotation dictated this pick."
+  "gameImportance": "short string",
+  "reasoning": "1 concise sentence (max 25 words) covering goals/form, corners, injuries, importance, and rotation."
 }
 
-Matches to evaluate:
+Matches:
 ${matchDescriptions}`;
 
-            let completion;
-            try {
-                completion = await groq.chat.completions.create({
-                    model: 'openai/gpt-oss-120b',
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: userPrompt }
-                    ],
-                    temperature: 0.2,
-                    response_format: { type: 'json_object' }
-                });
-            } catch (jsonModeErr) {
-                completion = await groq.chat.completions.create({
-                    model: 'openai/gpt-oss-120b',
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: userPrompt }
-                    ],
-                    temperature: 0.2
-                });
-            }
+            const modelOrder = [
+                GROQ_MODELS[batchIdx % GROQ_MODELS.length],
+                ...GROQ_MODELS.filter((_, idx) => idx !== batchIdx % GROQ_MODELS.length)
+            ];
 
-            const rawContent = completion.choices[0]?.message?.content || '{}';
-            let parsed = {};
-            try {
-                parsed = JSON.parse(rawContent);
-            } catch (e) {
-                const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    parsed = JSON.parse(jsonMatch[0]);
+            for (const modelName of modelOrder) {
+                try {
+                    const completion = await groq.chat.completions.create({
+                        model: modelName,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: userPrompt }
+                        ],
+                        temperature: 0.2,
+                        response_format: { type: 'json_object' }
+                    });
+
+                    const rawContent = completion.choices[0]?.message?.content || '{}';
+                    let parsed = {};
+                    try {
+                        parsed = JSON.parse(rawContent);
+                    } catch (_) {
+                        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+                    }
+                    const arr = parsed.evaluations || parsed.matches || parsed.picks || [];
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        return arr;
+                    }
+                } catch (err) {
+                    console.warn(`Batch ${batchIdx} fallback from ${modelName}:`, err.message);
                 }
             }
-            return Array.isArray(parsed.evaluations) ? parsed.evaluations : [];
+            return [];
         };
 
-        const batchSize = 12;
+        const batchSize = 14;
         const batches = [];
         for (let i = 0; i < preparedMatches.length; i += batchSize) {
             batches.push(preparedMatches.slice(i, i + batchSize));
         }
 
         const batchEvaluations = await Promise.all(
-            batches.map(b =>
-                evaluateBatch(b).catch(err => {
-                    console.error('AI batch evaluation error:', err.message);
-                    return [];
-                })
-            )
+            batches.map((b, idx) => evaluateBatch(b, idx))
         );
 
         const evalMap = new Map();
         batchEvaluations.flat().forEach(ev => {
-            if (ev && ev.matchId) {
-                evalMap.set(String(ev.matchId), ev);
+            const id = ev?.matchId || ev?.id;
+            if (id) {
+                evalMap.set(String(id), ev);
             }
         });
 
@@ -1123,7 +1177,7 @@ ${matchDescriptions}`;
             if (!ev) continue;
 
             const conf = Number(ev.confidence) || 0;
-            if (!ev.includeInSlip || conf < minConfidence) continue;
+            if (ev.includeInSlip === false || conf < minConfidence) continue;
 
             const chosenMarket = ev.selectedMarket || 'Over 1.5';
             const realOdd = m.availableOdds[chosenMarket];

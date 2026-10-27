@@ -126,7 +126,7 @@ const MyTeams = () => {
   const [generatedMatches, setGeneratedMatches] = useState([]);
   const [showGeneratedSlip, setShowGeneratedSlip] = useState(false);
   const [savingSlip, setSavingSlip] = useState(false);
-  const [slipMinConfidence, setSlipMinConfidence] = useState(75);
+  const [slipMinConfidence, setSlipMinConfidence] = useState(70);
   const [totalEvaluatedCount, setTotalEvaluatedCount] = useState(0);
 
   const filteredTeams = MY_TEAMS.filter(team => 
@@ -226,6 +226,23 @@ const MyTeams = () => {
 
   const handleRemoveSlipMatch = (matchId) => {
     setGeneratedMatches(prev => prev.filter(m => m.matchId !== matchId));
+  };
+
+  const handleCopyGeneratedSlip = () => {
+    if (activeSlipMatches.length === 0) return;
+    const totalOdds = activeSlipMatches.reduce((acc, m) => acc * (m.marketOdds || 1.0), 1);
+    let text = `AI 14-Day Slip (${activeSlipMatches.length} games)\n------------------\n`;
+    activeSlipMatches.forEach(m => {
+      text += `${m.homeTeam} vs ${m.awayTeam} (${m.league})\n`;
+      text += `Market: ${m.selectedMarket} | AI Confidence: ${m.confidence}%\n`;
+      if (m.expectedCorners) text += `Expected Corners: ${m.expectedCorners}\n`;
+      text += `Market Odds: ${Number(m.marketOdds || 1).toFixed(2)}\n`;
+      if (m.reasoning) text += `Reason: ${m.reasoning}\n`;
+      text += `\n`;
+    });
+    text += `Total Slip Odds: ${totalOdds.toFixed(2)}`;
+    navigator.clipboard.writeText(text);
+    alert('AI Slip copied to clipboard!');
   };
 
   const handleSaveSlip = async () => {
@@ -632,13 +649,22 @@ const MyTeams = () => {
                               {activeSlipMatches.reduce((acc, m) => acc * (m.marketOdds || 1.0), 1).toFixed(2)}
                           </span>
                       </div>
-                      <button 
-                          onClick={handleSaveSlip}
-                          disabled={savingSlip}
-                          className={`w-full py-2.5 rounded-xl font-bold text-white shadow-md transition-colors text-xs sm:text-sm flex items-center justify-center gap-2 ${savingSlip ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-                      >
-                          {savingSlip ? 'Saving...' : `Save High-Confidence AI Slip (${activeSlipMatches.length})`}
-                      </button>
+                      <div className="flex gap-2">
+                          <button
+                              type="button"
+                              onClick={handleCopyGeneratedSlip}
+                              className="px-4 py-2.5 rounded-xl font-bold bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 transition-colors text-xs sm:text-sm cursor-pointer"
+                          >
+                              Copy
+                          </button>
+                          <button 
+                              onClick={handleSaveSlip}
+                              disabled={savingSlip}
+                              className={`flex-1 py-2.5 rounded-xl font-bold text-white shadow-md transition-colors text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer ${savingSlip ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                          >
+                              {savingSlip ? 'Saving...' : `Save AI Slip (${activeSlipMatches.length})`}
+                          </button>
+                      </div>
                   </div>
               )}
           </motion.div>
