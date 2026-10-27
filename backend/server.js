@@ -417,17 +417,37 @@ app.get('/api/teams/:name/matches', async (req, res) => {
 
 app.post('/api/my-teams/generate-slip', async (req, res) => {
     try {
-        const { teams, minConfidence } = req.body || {};
+        const { teams, minConfidence, maxGames } = req.body || {};
         if (!Array.isArray(teams) || teams.length === 0) {
             return res.status(400).json({ error: 'Tracked teams array is required' });
         }
 
         const AiPrematchService = require('./services/AiPrematchService');
-        const result = await AiPrematchService.generateMyTeams14DayAiSlip(teams, { minConfidence });
+        const result = await AiPrematchService.generateMyTeams14DayAiSlip(teams, {
+            minConfidence,
+            maxGames: maxGames || 20
+        });
         res.json(result);
     } catch (error) {
         console.error('Error generating AI 14-day slip:', error.message);
         res.status(500).json({ error: error.message || 'Failed to generate AI 14-day slip' });
+    }
+});
+
+app.post('/api/matches/today/generate-slip', async (req, res) => {
+    try {
+        const { date, timezone, minConfidence, maxGames } = req.body || {};
+        const AiPrematchService = require('./services/AiPrematchService');
+        const result = await AiPrematchService.generateTodaysAiSlip({
+            date,
+            timezone,
+            minConfidence,
+            maxGames: maxGames || 20
+        });
+        res.json(result);
+    } catch (error) {
+        console.error("Error generating Today's AI slip:", error.message);
+        res.status(500).json({ error: error.message || "Failed to generate Today's AI slip" });
     }
 });
 

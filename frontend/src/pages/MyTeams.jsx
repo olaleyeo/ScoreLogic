@@ -195,7 +195,8 @@ const MyTeams = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           teams: MY_TEAMS,
-          minConfidence: 70
+          minConfidence: 70,
+          maxGames: 20
         })
       });
 
@@ -204,10 +205,12 @@ const MyTeams = () => {
         throw new Error(data.error || 'Failed to generate AI 14-day slip');
       }
 
-      // Deduplicate and strictly sort by highest confidence first
+      // Deduplicate, strictly sort by highest confidence first, and cap at max 20 games
       const uniqueMatches = Array.from(
         new Map((data.matches || []).map(m => [m.matchId, m])).values()
-      ).sort((a, b) => (Number(b.confidence) || 0) - (Number(a.confidence) || 0));
+      )
+        .sort((a, b) => (Number(b.confidence) || 0) - (Number(a.confidence) || 0))
+        .slice(0, 20);
 
       setTotalEvaluatedCount(data.totalEvaluated || uniqueMatches.length);
       setGeneratedMatches(uniqueMatches);
@@ -220,9 +223,9 @@ const MyTeams = () => {
     }
   };
 
-  const activeSlipMatches = generatedMatches.filter(
-    m => (Number(m.confidence) || 0) >= slipMinConfidence
-  );
+  const activeSlipMatches = generatedMatches
+    .filter(m => (Number(m.confidence) || 0) >= slipMinConfidence)
+    .slice(0, 20);
 
   const handleRemoveSlipMatch = (matchId) => {
     setGeneratedMatches(prev => prev.filter(m => m.matchId !== matchId));
@@ -522,7 +525,7 @@ const MyTeams = () => {
                               AI 14-Day Slip ({activeSlipMatches.length} / {totalEvaluatedCount} Evaluated)
                           </span>
                           <span className="text-[10px] text-indigo-100 block">
-                              Sorted by highest AI confidence • Multi-market
+                              Max 20 games • Sorted by highest AI confidence • Multi-market
                           </span>
                       </div>
                   </div>

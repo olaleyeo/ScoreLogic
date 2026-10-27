@@ -957,7 +957,206 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             teamCountMap.set(aKey, aCount + 1);
         }
 
-        // Enrich top 6 uncached fixtures in parallel (fast 2.5s timeout so request never hangs)
+        const maxGames = Number(options.maxGames) || 20;
+        return this.evaluateCandidatesWithAi(prioritizedCandidates, {
+            vaultOddsMap,
+            teamScheduleMap,
+            minConfidence,
+            maxGames,
+            apiKey,
+            groqKey
+        });
+    }
+
+    static async generateTodaysAiSlip(options = {}) {
+        const apiKey = process.env.API_FOOTBALL_KEY;
+        const groqKey = process.env.GROQ_API_KEY;
+        if (!groqKey) {
+            throw new Error('GROQ_API_KEY is missing in backend .env');
+        }
+
+        const minConfidence = Number(options.minConfidence) || 70;
+        const maxGames = Number(options.maxGames) || 20;
+        const targetDate = options.date || new Date().toISOString().split('T')[0];
+
+        // Build 5-day window (today + next 4 days) so AI can evaluate upcoming games & manager rotation for today's teams
+        const baseDate = new Date(`${targetDate}T00:00:00Z`);
+        const scheduleDates = [];
+        for (let i = 0; i < 5; i++) {
+            const d = new Date(baseDate);
+            d.setUTCDate(d.getUTCDate() + i);
+            scheduleDates.push(d.toISOString().split('T')[0]);
+        }
+
+        let todayFixtures = [];
+        let scheduleFixtures = [];
+
+        if (!apiKey || apiKey === 'your_api_key_here') {
+            const OddsService = require('./OddsService');
+            const mockMatches = OddsService.getMockData();
+            todayFixtures = mockMatches.map((m, idx) => ({
+                fixture: {
+                    id: m.matchId,
+                    date: new Date(Date.now() + (idx + 1) * 1800 * 1000).toISOString(),
+                    status: { short: 'NS' }
+                },
+                league: { name: m.league, country: '', round: 'Regular Season' },
+                teams: {
+                    home: { id: `h-${idx}`, name: m.homeTeam },
+                    away: { id: `a-${idx}`, name: m.awayTeam }
+                },
+                _mockOdds: {
+                    ...m.marketOdds,
+                    'Home Win': m.matchWinnerOdds?.Home,
+                    'Away Win': m.matchWinnerOdds?.Away
+                },
+                _zeroZeroOdds: m.correctScoreOdds?.['0:0'] || null
+            }));
+            scheduleFixtures = [...todayFixtures];
+        } else {
+            const results = await Promise.all(
+                scheduleDates.map(d =>
+                    this.fetchFixturesForDateCached(d, apiKey).catch(err => {
+                        console.error(`Error fetching fixtures for ${d}:`, err.message);
+                        return [];
+                    })
+                )
+            );
+            todayFixtures = results[0] || [];
+            results.forEach(arr => {
+                scheduleFixtures = scheduleFixtures.concat(arr);
+            });
+        }
+
+        if (todayFixtures.length === 0) {
+            return { matches: [], totalEvaluated: 0 };
+        }
+
+        // Build schedule map across the 5-day window for rotation risk context
+        const teamScheduleMap = new Map();
+        const addTeamSchedule = (teamName, fixtureObj) => {
+            if (!teamName) return;
+            const key = teamName.toLowerCase();
+            if (!teamScheduleMap.has(key)) teamScheduleMap.set(key, []);
+            teamScheduleMap.get(key).push(fixtureObj);
+        };
+
+        scheduleFixtures.forEach(item => {
+            const hName = item.teams?.home?.name;
+            const aName = item.teams?.away?.name;
+            const fDate = item.fixture?.date;
+            if (!hName || !aName || !fDate) return;
+            const summary = {
+                id: String(item.fixture.id),
+                date: fDate,
+                league: item.league?.name || 'Unknown',
+                round: item.league?.round || '',
+                home: hName,
+                away: aName
+            };
+            addTeamSchedule(hName, summary);
+            addTeamSchedule(aName, summary);
+        });
+
+        for (const [, sched] of teamScheduleMap.entries()) {
+            sched.sort((a, b) => new Date(a.date) - new Date(b.date));
+        }
+
+        // Lookup VaultMatch bookmaker odds for today
+        const { VaultMatch } = require('../database');
+        const vaultOddsMap = new Map();
+        try {
+            const vaultRows = await VaultMatch.findAll({
+                where: { date: targetDate }
+            });
+            vaultRows.forEach(row => {
+                try {
+                    const parsed = JSON.parse(row.rawData);
+                    if (parsed && parsed.matchId) {
+                        vaultOddsMap.set(String(parsed.matchId), parsed);
+                    }
+                } catch (_) {}
+            });
+        } catch (err) {
+            console.error('Vault lookup warning (today):', err.message);
+        }
+
+        // Filter today's fixtures to upcoming/not-started first; if none remain today, allow today's scheduled/non-cancelled games
+        const now = new Date();
+        let eligibleToday = todayFixtures.filter(item => {
+            const short = item.fixture?.status?.short;
+            if (!['NS', 'TBD'].includes(short)) return false;
+            const kickoff = item.fixture?.date ? new Date(item.fixture.date) : null;
+            return !kickoff || kickoff > now;
+        });
+
+        if (eligibleToday.length < 8) {
+            eligibleToday = todayFixtures.filter(item => {
+                const short = item.fixture?.status?.short;
+                return !['CANC', 'PST', 'ABD', 'AWD', 'WO'].includes(short);
+            });
+        }
+
+        const PRIORITY_COUNTRIES = new Set([
+            'england', 'spain', 'germany', 'italy', 'france', 'portugal',
+            'netherlands', 'scotland', 'turkey', 'austria', 'belgium',
+            'bulgaria', 'croatia', 'czech-republic', 'czechia', 'denmark',
+            'norway', 'switzerland', 'greece', 'poland', 'romania', 'sweden',
+            'brazil', 'argentina', 'colombia', 'chile', 'usa', 'mexico',
+            'world', 'europe'
+        ]);
+
+        const isYouthOrFriendly = item => {
+            const text = `${item.league?.name || ''} ${item.teams?.home?.name || ''} ${item.teams?.away?.name || ''}`;
+            return /\b(u17|u18|u19|u20|u21|u23|reserves|reserve|women|friendly|amateur)\b/i.test(text);
+        };
+
+        const sortedToday = [...eligibleToday].sort((a, b) => {
+            const aVault = vaultOddsMap.has(String(a.fixture?.id)) ? 1 : 0;
+            const bVault = vaultOddsMap.has(String(b.fixture?.id)) ? 1 : 0;
+            if (bVault !== aVault) return bVault - aVault;
+
+            const aYouth = isYouthOrFriendly(a) ? 1 : 0;
+            const bYouth = isYouthOrFriendly(b) ? 1 : 0;
+            if (aYouth !== bYouth) return aYouth - bYouth;
+
+            const aPri = PRIORITY_COUNTRIES.has((a.league?.country || '').toLowerCase()) ? 1 : 0;
+            const bPri = PRIORITY_COUNTRIES.has((b.league?.country || '').toLowerCase()) ? 1 : 0;
+            if (bPri !== aPri) return bPri - aPri;
+
+            return new Date(a.fixture.date) - new Date(b.fixture.date);
+        });
+
+        // Deduplicate and take top 36 fixtures for today so Groq evaluates all of them in <5s
+        const seenIds = new Set();
+        const prioritizedCandidates = [];
+        for (const item of sortedToday) {
+            const id = String(item.fixture?.id || '');
+            if (!id || seenIds.has(id)) continue;
+            seenIds.add(id);
+            prioritizedCandidates.push(item);
+            if (prioritizedCandidates.length >= 36) break;
+        }
+
+        if (prioritizedCandidates.length === 0) {
+            return { matches: [], totalEvaluated: 0 };
+        }
+
+        return this.evaluateCandidatesWithAi(prioritizedCandidates, {
+            vaultOddsMap,
+            teamScheduleMap,
+            minConfidence,
+            maxGames,
+            apiKey,
+            groqKey
+        });
+    }
+
+    static async evaluateCandidatesWithAi(
+        prioritizedCandidates,
+        { vaultOddsMap, teamScheduleMap, minConfidence = 70, maxGames = 20, apiKey, groqKey }
+    ) {
+        // Enrich top 6 uncached fixtures in parallel (fast timeout so request never hangs)
         const uncachedTop = prioritizedCandidates
             .filter(c => !this.enrichmentCache[String(c.fixture.id)])
             .slice(0, 6);
@@ -1246,14 +1445,14 @@ ${matchDescriptions}`;
             });
         }
 
-        // Prioritize HIGHER confidence first when adding games to the slip
+        // Prioritize HIGHER confidence first when adding games to the slip, capped at maxGames (20)
         evaluatedMatches.sort((a, b) => {
             if (b.confidence !== a.confidence) return b.confidence - a.confidence;
             return new Date(a.kickoffTime) - new Date(b.kickoffTime);
         });
 
         return {
-            matches: evaluatedMatches,
+            matches: evaluatedMatches.slice(0, maxGames),
             totalEvaluated: preparedMatches.length
         };
     }
