@@ -30,7 +30,9 @@ class AiPrematchService {
     static CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
     static fixturesDateCache = {}; // { 'YYYY-MM-DD': { data, timestamp } }
     static enrichmentCache = {}; // { fixtureId: { data, timestamp } }
+    static aiMatchEvalCache = {}; // { fixtureId: { evalObj, timestamp } }
     static FIXTURE_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+    static AI_EVAL_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
 
     static async getTopTeams() {
         if (this.standingsCache && this.standingsCacheTime && (Date.now() - this.standingsCacheTime < this.CACHE_DURATION_MS)) {
@@ -1051,13 +1053,25 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
 
         // Disable groq-sdk 30s internal retry backoff so model fallback is instantaneous on 429
         const Groq = require('groq-sdk');
-        const groq = new Groq({ apiKey: groqKey, maxRetries: 0, timeout: 14000 });
+        const groq = new Groq({ apiKey: groqKey, maxRetries: 0, timeout: 18000 });
         const GROQ_MODELS = [
-            'llama-3.3-70b-versatile',
             'openai/gpt-oss-120b',
             'openai/gpt-oss-20b',
-            'llama-3.1-8b-instant'
+            'qwen/qwen3.8-27b'
         ];
+
+        const nowTs = Date.now();
+        const evalMap = new Map();
+        const uncachedMatches = [];
+
+        for (const m of preparedMatches) {
+            const cached = this.aiMatchEvalCache[m.matchId];
+            if (cached && nowTs - cached.timestamp < this.AI_EVAL_CACHE_TTL) {
+                evalMap.set(m.matchId, cached.evalObj);
+            } else {
+                uncachedMatches.push(m);
+            }
+        }
 
         const evaluateBatch = async (batch, batchIdx) => {
             const matchDescriptions = batch.map((m, i) => {
@@ -1067,11 +1081,11 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
                 const statsLine = m.homeRecord !== 'N/A'
                     ? ` | H:${m.homeRecord}(${m.homeGoals}) A:${m.awayRecord}(${m.awayGoals}) Inj:${m.injuriesAndSuspensions}`
                     : '';
-                return `#${i + 1} [matchId:"${m.matchId}"] ${m.homeTeam} vs ${m.awayTeam} (${m.league} - ${m.round}, ${m.kickoffTime.split('T')[0]}) | H_Sched:${m.homeSchedule} | A_Sched:${m.awaySchedule} | Odds:${oddsStr}${statsLine}`;
+                return `Item ${i + 1} | matchId: "${m.matchId}" | ${m.homeTeam} vs ${m.awayTeam} (${m.league} - ${m.round}, ${m.kickoffTime.split('T')[0]}) | H_Sched:${m.homeSchedule} | A_Sched:${m.awaySchedule} | Odds:${oddsStr}${statsLine}`;
             }).join('\n');
 
             const systemPrompt = `You are a strict quantitative football betting analyst.
-Evaluate each match by strictly considering ALL of:
+Evaluate EVERY match in the input list by strictly considering ALL of:
 1. Goals Scored & Goals Conceded (home/away averages)
 2. Corners Profile (wing play, shot volume, expected corners for both teams)
 3. Home Records vs Away Records
@@ -1097,17 +1111,20 @@ ALLOWED MARKETS (Strictly diversify picks across these categories based on each 
 - "Under 10.5 Corners"
 
 RULES:
-- Select a varied mix of Home Win, Away Win, Over/Under, BTTS - Yes/No, and Expected Corners markets where each fits best.
-- For each match in the batch, pick its single strongest market and assign confidence (70-96). Set includeInSlip: true for all matches where your selected market has confidence >= 72 (typically 8-12 matches per batch).
+- You MUST return an evaluation object in the "evaluations" array for EVERY match in the input list (do not skip matches; return all ${batch.length} items).
+- Select a varied mix of Home Win, Away Win, Over/Under (Over 1.5, Over 2.5, Under 2.5, Under 3.5), BTTS - Yes/No, and Expected Corners (Over 8.5 Corners, Over 9.5 Corners, Over 10.5 Corners, Under 9.5 Corners) across the batch.
+- Avoid picking Home Win or Away Win if the win odds are below 1.20 — for heavy mismatches (win odds < 1.20), pick "Over 9.5 Corners", "Over 10.5 Corners", "Over 2.5", "Over 3.5", or "BTTS - No" for better value!
+- Ensure at least 2-3 matches per batch use an Expected Corners market ("Over 8.5 Corners", "Over 9.5 Corners", "Over 10.5 Corners") and at least 2-3 use "BTTS - Yes" or "BTTS - No" where wing play/attacking profiles fit.
+- Assign a realistic confidence score (65-95) and set "includeInSlip": true if confidence >= 72, or false if < 72.
 - Output strictly valid JSON: {"evaluations": [...]}.`;
 
-            const userPrompt = `Evaluate these ${batch.length} matches and return JSON {"evaluations": [ ... ]} where each approved pick has:
+            const userPrompt = `Evaluate all ${batch.length} matches below and return JSON {"evaluations": [ ... ]} with ${batch.length} objects where each object has:
 {
-  "matchId": "string (exact matchId from input)",
-  "includeInSlip": true,
+  "matchId": "exact matchId string from input",
+  "includeInSlip": boolean,
   "selectedMarket": "Home Win | Away Win | Over 1.5 | Over 2.5 | Under 2.5 | Under 3.5 | BTTS - Yes | BTTS - No | Over 8.5 Corners | Over 9.5 Corners | Over 10.5 Corners | Under 9.5 Corners | Under 10.5 Corners",
   "marketOdds": number,
-  "confidence": number (72-96),
+  "confidence": number (65-95),
   "expectedCorners": "Home X.X - Away Y.Y (Total: Z.Z)",
   "rotationRisk": "Low" | "Medium" | "High",
   "gameImportance": "short string",
@@ -1124,7 +1141,7 @@ ${matchDescriptions}`;
 
             for (const modelName of modelOrder) {
                 try {
-                    const completion = await groq.chat.completions.create({
+                    const reqOpts = {
                         model: modelName,
                         messages: [
                             { role: 'system', content: systemPrompt },
@@ -1132,7 +1149,12 @@ ${matchDescriptions}`;
                         ],
                         temperature: 0.2,
                         response_format: { type: 'json_object' }
-                    });
+                    };
+                    if (modelName.startsWith('openai/')) {
+                        reqOpts.reasoning_effort = 'low';
+                    }
+
+                    const completion = await groq.chat.completions.create(reqOpts);
 
                     const rawContent = completion.choices[0]?.message?.content || '{}';
                     let parsed = {};
@@ -1143,8 +1165,19 @@ ${matchDescriptions}`;
                         if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
                     }
                     const arr = parsed.evaluations || parsed.matches || parsed.picks || [];
-                    if (Array.isArray(arr) && arr.length > 0) {
-                        return arr;
+                    if (Array.isArray(arr) && arr.length >= Math.min(4, batch.length)) {
+                        return arr.map((ev, idx) => {
+                            let resolvedId = String(ev?.matchId || ev?.id || '').replace(/^#|^Item\s*/i, '').trim();
+                            if (!batch.some(b => b.matchId === resolvedId)) {
+                                const asIndex = parseInt(resolvedId, 10);
+                                if (!isNaN(asIndex) && asIndex >= 1 && asIndex <= batch.length) {
+                                    resolvedId = batch[asIndex - 1].matchId;
+                                } else if (batch[idx]) {
+                                    resolvedId = batch[idx].matchId;
+                                }
+                            }
+                            return { ...ev, matchId: resolvedId };
+                        });
                     }
                 } catch (err) {
                     console.warn(`Batch ${batchIdx} fallback from ${modelName}:`, err.message);
@@ -1153,23 +1186,29 @@ ${matchDescriptions}`;
             return [];
         };
 
-        const batchSize = 14;
-        const batches = [];
-        for (let i = 0; i < preparedMatches.length; i += batchSize) {
-            batches.push(preparedMatches.slice(i, i + batchSize));
-        }
-
-        const batchEvaluations = await Promise.all(
-            batches.map((b, idx) => evaluateBatch(b, idx))
-        );
-
-        const evalMap = new Map();
-        batchEvaluations.flat().forEach(ev => {
-            const id = ev?.matchId || ev?.id;
-            if (id) {
-                evalMap.set(String(id), ev);
+        if (uncachedMatches.length > 0) {
+            const batchSize = 14;
+            const batches = [];
+            for (let i = 0; i < uncachedMatches.length; i += batchSize) {
+                batches.push(uncachedMatches.slice(i, i + batchSize));
             }
-        });
+
+            const batchEvaluations = await Promise.all(
+                batches.map((b, idx) => evaluateBatch(b, idx))
+            );
+
+            batchEvaluations.flat().forEach(ev => {
+                const id = ev?.matchId || ev?.id;
+                if (id) {
+                    const key = String(id);
+                    evalMap.set(key, ev);
+                    this.aiMatchEvalCache[key] = {
+                        evalObj: ev,
+                        timestamp: Date.now()
+                    };
+                }
+            });
+        }
 
         const evaluatedMatches = [];
         for (const m of preparedMatches) {
