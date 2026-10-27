@@ -85,11 +85,35 @@ class ResultService {
                         else if (match.selectedMarket === 'Under 3.5' && totalGoals < 3.5) won = true;
                         else if (match.selectedMarket === 'Over 1.5' && totalGoals > 1.5) won = true;
                         else if (match.selectedMarket === 'Over 2.5' && totalGoals > 2.5) won = true;
+                        else if (match.selectedMarket === 'Over 3.5' && totalGoals > 3.5) won = true;
                         else if (match.selectedMarket === 'Home Win' && goalsHome > goalsAway) won = true;
                         else if (match.selectedMarket === 'Away Win' && goalsAway > goalsHome) won = true;
+                        else if (match.selectedMarket === 'BTTS - Yes' && goalsHome > 0 && goalsAway > 0) won = true;
+                        else if (match.selectedMarket === 'BTTS - No' && (goalsHome === 0 || goalsAway === 0)) won = true;
                         else if (match.selectedMarket === 'Draw In Half' && fixtureItem.score && fixtureItem.score.halftime) {
                             if (fixtureItem.score.halftime.home === fixtureItem.score.halftime.away) {
                                 won = true;
+                            }
+                        } else if (match.selectedMarket && match.selectedMarket.toLowerCase().includes('corners')) {
+                            try {
+                                const statsRes = await axios.get(`https://v3.football.api-sports.io/fixtures/statistics`, {
+                                    headers: { 'x-apisports-key': apiKey },
+                                    params: { fixture: match.matchId }
+                                });
+                                const statsArr = statsRes.data?.response || [];
+                                let totalCorners = 0;
+                                statsArr.forEach(teamStat => {
+                                    const cornerItem = (teamStat.statistics || []).find(s => s.type === 'Corner Kicks');
+                                    if (cornerItem && cornerItem.value !== null) {
+                                        totalCorners += Number(cornerItem.value) || 0;
+                                    }
+                                });
+                                const lineMatch = match.selectedMarket.match(/(\d+(\.\d+)?)/);
+                                const line = lineMatch ? parseFloat(lineMatch[1]) : 9.5;
+                                if (match.selectedMarket.toLowerCase().includes('over') && totalCorners > line) won = true;
+                                if (match.selectedMarket.toLowerCase().includes('under') && totalCorners < line) won = true;
+                            } catch (cornerErr) {
+                                console.error(`ResultService: Failed to evaluate corners for ${match.matchId}:`, cornerErr.message);
                             }
                         }
 

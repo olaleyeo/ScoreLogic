@@ -126,6 +126,8 @@ const MyTeams = () => {
   const [generatedMatches, setGeneratedMatches] = useState([]);
   const [showGeneratedSlip, setShowGeneratedSlip] = useState(false);
   const [savingSlip, setSavingSlip] = useState(false);
+  const [slipMinConfidence, setSlipMinConfidence] = useState(75);
+  const [totalEvaluatedCount, setTotalEvaluatedCount] = useState(0);
 
   const filteredTeams = MY_TEAMS.filter(team => 
     team.toLowerCase().includes(searchTerm.toLowerCase())
@@ -188,40 +190,26 @@ const MyTeams = () => {
     setShowGeneratedSlip(false);
 
     try {
-      let allMatches = [];
-      const today = new Date();
-      
-      // Fetch the next 14 days sequentially to ensure we capture the 2 upcoming matches for most teams
-      for (let i = 0; i < 14; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split('T')[0];
-        
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/slips?strategy=Over15&date=${dateStr}`);
-            if (response.ok) {
-                const data = await response.json();
-                allMatches = allMatches.concat(data.matches || []);
-            }
-        } catch (e) {
-            console.error(`Error fetching date ${dateStr}:`, e);
-        }
-      }
-
-      // Filter matches to include only those involving any of the tracked teams
-      const myTeamsLower = MY_TEAMS.map(t => t.toLowerCase());
-      
-      const filtered = allMatches.filter(match => {
-        const homeLower = match.homeTeam.toLowerCase();
-        const awayLower = match.awayTeam.toLowerCase();
-        
-        // Exact or substring match in case team names slightly differ from the API names
-        return myTeamsLower.some(t => homeLower.includes(t) || awayLower.includes(t) || t.includes(homeLower) || t.includes(awayLower));
+      const response = await fetch(`${API_BASE_URL}/api/my-teams/generate-slip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teams: MY_TEAMS,
+          minConfidence: 70
+        })
       });
 
-      // Deduplicate matches just in case
-      const uniqueMatches = Array.from(new Map(filtered.map(m => [m.matchId, m])).values());
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate AI 14-day slip');
+      }
 
+      // Deduplicate and strictly sort by highest confidence first
+      const uniqueMatches = Array.from(
+        new Map((data.matches || []).map(m => [m.matchId, m])).values()
+      ).sort((a, b) => (Number(b.confidence) || 0) - (Number(a.confidence) || 0));
+
+      setTotalEvaluatedCount(data.totalEvaluated || uniqueMatches.length);
       setGeneratedMatches(uniqueMatches);
       setShowGeneratedSlip(true);
     } catch (err) {
@@ -232,18 +220,26 @@ const MyTeams = () => {
     }
   };
 
+  const activeSlipMatches = generatedMatches.filter(
+    m => (Number(m.confidence) || 0) >= slipMinConfidence
+  );
+
+  const handleRemoveSlipMatch = (matchId) => {
+    setGeneratedMatches(prev => prev.filter(m => m.matchId !== matchId));
+  };
+
   const handleSaveSlip = async () => {
-    if (generatedMatches.length === 0) return;
+    if (activeSlipMatches.length === 0) return;
     setSavingSlip(true);
     try {
       const todayFormatted = new Date().toISOString().split('T')[0];
-      const totalOdds = generatedMatches.reduce((acc, m) => acc * (m.marketOdds || 1.0), 1);
+      const totalOdds = activeSlipMatches.reduce((acc, m) => acc * (m.marketOdds || 1.0), 1);
       
       const payload = {
           date: todayFormatted,
           type: 'custom',
           totalOdds: parseFloat(totalOdds.toFixed(2)),
-          matches: generatedMatches
+          matches: activeSlipMatches
       };
       
       const response = await fetch(`${API_BASE_URL}/api/slips/save`, {
@@ -253,7 +249,7 @@ const MyTeams = () => {
       });
       
       if (!response.ok) throw new Error('Failed to save slip');
-      alert('Generated Slip saved successfully! You can view it in the History page.');
+      alert('Generated AI Slip saved successfully! You can view it in the History page.');
       setShowGeneratedSlip(false);
     } catch (err) {
       alert(err.message);
@@ -496,47 +492,144 @@ const MyTeams = () => {
           <motion.div 
               drag={typeof window !== 'undefined' && window.innerWidth >= 640}
               dragMomentum={false}
-              className="fixed inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-6 sm:right-6 w-auto sm:w-96 max-w-[calc(100vw-1.5rem)] sm:max-w-md bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl z-50 overflow-hidden flex flex-col max-h-[80vh]"
+              className="fixed inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-6 sm:right-6 w-auto sm:w-[28rem] max-w-[calc(100vw-1.5rem)] sm:max-w-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl z-50 overflow-hidden flex flex-col max-h-[84vh]"
               initial={{ opacity: 0, y: 50, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
           >
               <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-3 sm:p-3.5 flex justify-between items-center select-none">
                   <div className="flex items-center gap-2 text-white">
                       <GripHorizontal size={18} className="opacity-70 hidden sm:block cursor-grab" />
-                      <span className="font-bold text-sm">Generated Slip ({generatedMatches.length})</span>
+                      <Bot size={17} className="shrink-0" />
+                      <div>
+                          <span className="font-bold text-sm block leading-tight">
+                              AI 14-Day Slip ({activeSlipMatches.length} / {totalEvaluatedCount} Evaluated)
+                          </span>
+                          <span className="text-[10px] text-indigo-100 block">
+                              Sorted by highest AI confidence • Multi-market
+                          </span>
+                      </div>
                   </div>
                   <button onClick={() => setShowGeneratedSlip(false)} className="text-white opacity-70 hover:opacity-100 p-1 transition-opacity">
                       <X size={18} />
                   </button>
               </div>
 
-              <div className="p-3 sm:p-4 overflow-y-auto flex-1 bg-gray-50/50 dark:bg-gray-800/50 max-h-[45vh]">
-                  {generatedMatches.length === 0 ? (
+              {/* Confidence Priority Bar */}
+              <div className="px-3 sm:px-4 py-2 bg-indigo-50/70 dark:bg-gray-800/90 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-gray-700 dark:text-gray-300">Min AI Confidence:</span>
+                  <div className="flex items-center gap-1">
+                      {[70, 75, 80, 85, 90].map(threshold => (
+                          <button
+                              key={threshold}
+                              type="button"
+                              onClick={() => setSlipMinConfidence(threshold)}
+                              className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition-colors cursor-pointer ${
+                                  slipMinConfidence === threshold
+                                      ? 'bg-indigo-600 text-white shadow-xs'
+                                      : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                              }`}
+                          >
+                              {threshold}%+
+                          </button>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="p-3 sm:p-4 overflow-y-auto flex-1 bg-gray-50/50 dark:bg-gray-800/50 max-h-[50vh]">
+                  {activeSlipMatches.length === 0 ? (
                       <div className="text-center py-6 text-gray-500 dark:text-gray-400 text-xs sm:text-sm">
-                          No matches available today for your tracked teams using the Over 1.5 strategy.
+                          No upcoming matches for your tracked teams met the ≥{slipMinConfidence}% strict AI confidence threshold. Try lowering the confidence filter above.
                       </div>
                   ) : (
                       <div className="space-y-2.5">
-                          {generatedMatches.map(match => (
+                          {activeSlipMatches.map(match => (
                               <div key={match.matchId} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3 shadow-xs relative">
-                                  <div className="flex justify-between items-start mb-1.5 pr-4">
-                                      <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider">{match.league}</span>
-                                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{match.marketOdds?.toFixed(2)}</span>
+                                  <button
+                                      type="button"
+                                      onClick={() => handleRemoveSlipMatch(match.matchId)}
+                                      className="absolute top-2.5 right-2.5 text-gray-400 hover:text-red-500 p-0.5 transition-colors"
+                                      title="Remove from slip"
+                                  >
+                                      <X size={14} />
+                                  </button>
+                                  <div className="flex justify-between items-start mb-1.5 pr-5 gap-2">
+                                      <div>
+                                          <span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider block">
+                                              {match.league}
+                                          </span>
+                                          {match.kickoffTime && (
+                                              <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                                                  {new Date(match.kickoffTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                                              </span>
+                                          )}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                                              match.confidence >= 85
+                                                  ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800'
+                                                  : match.confidence >= 78
+                                                  ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800'
+                                                  : 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-800'
+                                          }`}>
+                                              {match.confidence}% AI Conf
+                                          </span>
+                                          <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                                              @{match.marketOdds?.toFixed(2)}
+                                          </span>
+                                      </div>
                                   </div>
-                                  <h4 className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">{match.homeTeam} <span className="text-gray-400 font-normal">vs</span> {match.awayTeam}</h4>
-                                  <p className="text-[11px] text-gray-500 dark:text-gray-400">Market: {match.selectedMarket}</p>
+
+                                  <h4 className="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-200 mb-1.5">
+                                      {match.homeTeam} <span className="text-gray-400 font-normal">vs</span> {match.awayTeam}
+                                  </h4>
+
+                                  <div className="flex flex-wrap items-center justify-between gap-1.5 bg-indigo-50/70 dark:bg-gray-900/70 px-2.5 py-1.5 rounded-lg mb-1.5 border border-indigo-100 dark:border-gray-700">
+                                      <span className="text-xs font-extrabold text-indigo-700 dark:text-indigo-300">
+                                          Pick: {match.selectedMarket}
+                                      </span>
+                                      {match.expectedCorners && (
+                                          <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400">
+                                              Corners: {match.expectedCorners}
+                                          </span>
+                                      )}
+                                  </div>
+
+                                  {(match.gameImportance || match.rotationRisk) && (
+                                      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                          {match.gameImportance && (
+                                              <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded font-medium">
+                                                  {match.gameImportance}
+                                              </span>
+                                          )}
+                                          {match.rotationRisk && (
+                                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                                  match.rotationRisk === 'High'
+                                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                                                      : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                              }`}>
+                                                  Rotation Risk: {match.rotationRisk}
+                                              </span>
+                                          )}
+                                      </div>
+                                  )}
+
+                                  {match.reasoning && (
+                                      <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-snug">
+                                          {match.reasoning}
+                                      </p>
+                                  )}
                               </div>
                           ))}
                       </div>
                   )}
               </div>
 
-              {generatedMatches.length > 0 && (
+              {activeSlipMatches.length > 0 && (
                   <div className="p-3 sm:p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
                       <div className="flex justify-between items-center mb-3">
-                          <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Odds</span>
+                          <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Combined Odds</span>
                           <span className="text-xl font-black text-indigo-600 dark:text-indigo-400">
-                              {generatedMatches.reduce((acc, m) => acc * (m.marketOdds || 1.0), 1).toFixed(2)}
+                              {activeSlipMatches.reduce((acc, m) => acc * (m.marketOdds || 1.0), 1).toFixed(2)}
                           </span>
                       </div>
                       <button 
@@ -544,7 +637,7 @@ const MyTeams = () => {
                           disabled={savingSlip}
                           className={`w-full py-2.5 rounded-xl font-bold text-white shadow-md transition-colors text-xs sm:text-sm flex items-center justify-center gap-2 ${savingSlip ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                       >
-                          {savingSlip ? 'Saving...' : 'Save Slip'}
+                          {savingSlip ? 'Saving...' : `Save High-Confidence AI Slip (${activeSlipMatches.length})`}
                       </button>
                   </div>
               )}

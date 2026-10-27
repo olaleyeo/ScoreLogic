@@ -8,6 +8,13 @@ const SlipCard = ({ title, slip, delay = 0, excludedMatches = [], onToggleExclud
     if (!slip || !slip.matches) return null;
 
     const getConfidenceColor = (confidence) => {
+        const num = Number(confidence);
+        if (!isNaN(num) && confidence !== null && confidence !== '') {
+            if (num >= 80) return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:shadow-[0_0_8px_rgba(74,222,128,0.4)]';
+            if (num >= 60) return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800 dark:shadow-[0_0_8px_rgba(96,165,250,0.4)]';
+            if (num >= 40) return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-800 dark:shadow-[0_0_8px_rgba(250,204,21,0.4)]';
+            return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800 dark:shadow-[0_0_8px_rgba(248,113,113,0.4)]';
+        }
         if (typeof confidence === 'string') {
             switch (confidence) {
                 case 'Very High': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:shadow-[0_0_8px_rgba(74,222,128,0.4)]';
@@ -17,11 +24,7 @@ const SlipCard = ({ title, slip, delay = 0, excludedMatches = [], onToggleExclud
                 default: return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
             }
         }
-        
-        if (confidence >= 80) return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800 dark:shadow-[0_0_8px_rgba(74,222,128,0.4)]';
-        if (confidence >= 60) return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800 dark:shadow-[0_0_8px_rgba(96,165,250,0.4)]';
-        if (confidence >= 40) return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-800 dark:shadow-[0_0_8px_rgba(250,204,21,0.4)]';
-        return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800 dark:shadow-[0_0_8px_rgba(248,113,113,0.4)]';
+        return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
     };
 
     const handleCopyText = () => {
@@ -29,8 +32,14 @@ const SlipCard = ({ title, slip, delay = 0, excludedMatches = [], onToggleExclud
         slip.matches.forEach(m => {
             text += `${m.homeTeam} vs ${m.awayTeam} (${m.league})\n`;
             text += `Market: ${m.selectedMarket}\n`;
-            text += `0:0 Odds: ${m.zeroZeroOdds.toFixed(2)}\n`;
-            text += `Market Odds: ${m.marketOdds.toFixed(2)}\n\n`;
+            if (m.confidence != null) {
+                const confStr = !isNaN(Number(m.confidence)) ? `${m.confidence}%` : m.confidence;
+                text += `AI Confidence: ${confStr}\n`;
+            }
+            if (m.zeroZeroOdds) {
+                text += `0:0 Odds: ${Number(m.zeroZeroOdds).toFixed(2)}\n`;
+            }
+            text += `Market Odds: ${Number(m.marketOdds || 1).toFixed(2)}\n\n`;
         });
         text += `Total Slip Odds: ${slip.totalOdds.toFixed(2)}`;
         
@@ -111,7 +120,9 @@ const SlipCard = ({ title, slip, delay = 0, excludedMatches = [], onToggleExclud
                                                 <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Remove</span>
                                             </label>
                                         )}
-                                        <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 block">0:0 @ {match.zeroZeroOdds?.toFixed(2)}</span>
+                                        {match.zeroZeroOdds != null && (
+                                            <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 block">0:0 @ {Number(match.zeroZeroOdds).toFixed(2)}</span>
+                                        )}
                                         {match.score && (
                                             <div className="flex items-center gap-1 mt-1 justify-end">
                                                 {match.status === 'live' && (

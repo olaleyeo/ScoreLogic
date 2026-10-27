@@ -415,6 +415,22 @@ app.get('/api/teams/:name/matches', async (req, res) => {
     }
 });
 
+app.post('/api/my-teams/generate-slip', async (req, res) => {
+    try {
+        const { teams, minConfidence } = req.body || {};
+        if (!Array.isArray(teams) || teams.length === 0) {
+            return res.status(400).json({ error: 'Tracked teams array is required' });
+        }
+
+        const AiPrematchService = require('./services/AiPrematchService');
+        const result = await AiPrematchService.generateMyTeams14DayAiSlip(teams, { minConfidence });
+        res.json(result);
+    } catch (error) {
+        console.error('Error generating AI 14-day slip:', error.message);
+        res.status(500).json({ error: error.message || 'Failed to generate AI 14-day slip' });
+    }
+});
+
 app.get('/api/sofascore/search', async (req, res) => {
     try {
         const axios = require('axios');
