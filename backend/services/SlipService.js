@@ -1,9 +1,55 @@
 class SlipService {
+    static isLowerDivisionOrUnpopular(leagueName) {
+        if (!leagueName) return true;
+        const lower = leagueName.toLowerCase();
+        return /\b(u17|u18|u19|u20|u21|u23|reserves|reserve|women|friendly|friendlies|amateur|national league|non league|isthmian|southern league|northern premier|league two|league one|3\. liga|regionalliga|oberliga|landesliga|serie c|serie d|primavera|primera federaci|segunda federaci|tercera|national 2|national 3|championnat national|tweede divisie|derde divisie|highland league|lowland league|3\. division|4\. division|division 2|division 3|third league|fourth league|regional|state|provincial)\b/i.test(
+            lower
+        );
+    }
+
     static isTopLeague(leagueName) {
-        if (!leagueName) return false;
-        const topLeagues = ['premier league', 'la liga', 'serie a', 'bundesliga', 'ligue 1', 'champions league', 'europa league', 'eredivisie', 'championship'];
+        if (!leagueName || this.isLowerDivisionOrUnpopular(leagueName)) return false;
+        const topLeagues = [
+            'premier league', 'epl', 'la liga', 'primera división', 'serie a', 'bundesliga',
+            'ligue 1', 'champions league', 'europa league', 'conference league',
+            'eredivisie', 'primeira liga', 'liga portugal', 'premiership',
+            'super lig', 'süper lig', 'pro league', 'superliga', 'eliteserien',
+            'allsvenskan', 'super league', 'hnl', 'chance liga', 'ekstraklasa',
+            'liga i', 'first league', 'liga profesional', 'brasileiro', 'mls', 'liga mx',
+            'fa cup', 'efl cup', 'league cup', 'dfb pokal', 'copa del rey', 'coppa italia'
+        ];
         const lowerName = leagueName.toLowerCase();
         return topLeagues.some(l => lowerName.includes(l));
+    }
+
+    static hasSufficientStats(match) {
+        if (!match) return false;
+        return Boolean(
+            (match.zeroZeroOdds !== null && match.zeroZeroOdds !== undefined) ||
+                (match.marketOdds && Number(match.marketOdds) > 1.01)
+        );
+    }
+
+    static filterAndRankByLeagueQuality(matches, minRequired = 12) {
+        const popularWithStats = matches.filter(
+            m => this.isTopLeague(m.league) && !this.isLowerDivisionOrUnpopular(m.league) && this.hasSufficientStats(m)
+        );
+        const fallbackNonLower = matches.filter(
+            m => !this.isTopLeague(m.league) && !this.isLowerDivisionOrUnpopular(m.league) && this.hasSufficientStats(m)
+        );
+        const fallbackLower = matches.filter(
+            m => this.isLowerDivisionOrUnpopular(m.league) && this.hasSufficientStats(m)
+        );
+
+        // Only use lower-division/unpopular leagues when popular leagues with sufficient data are not available
+        if (popularWithStats.length >= minRequired) {
+            return popularWithStats;
+        }
+        const combined = [...popularWithStats, ...fallbackNonLower];
+        if (combined.length >= minRequired) {
+            return combined;
+        }
+        return [...combined, ...fallbackLower];
     }
 
     static generateSlips(predictions) {
@@ -24,16 +70,7 @@ class SlipService {
         // Let's generate a 2-odds, 3-odds, 5-odds slip for each strategy if possible, to keep slips homogeneous.
         
         for (const [strategy, matches] of Object.entries(strategyGroups)) {
-            let availableMatches = [...matches];
-            
-            // Prioritize top leagues
-            availableMatches.sort((a, b) => {
-                const aIsTop = this.isTopLeague(a.league);
-                const bIsTop = this.isTopLeague(b.league);
-                if (aIsTop && !bIsTop) return -1;
-                if (!aIsTop && bIsTop) return 1;
-                return 0;
-            });
+            let availableMatches = this.filterAndRankByLeagueQuality(matches, 12);
 
             // Make sure availableMatches doesn't contain already used ones (from a previous strategy somehow? Not possible since strategies pick different markets for the same match, wait, a match could be picked by multiple strategies. We only want a match to appear ONCE across ALL slips.)
             availableMatches = availableMatches.filter(m => !usedMatchIds.has(m.matchId));

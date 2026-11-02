@@ -34,6 +34,10 @@ app.get('/api/slips', async (req, res) => {
             predictions = predictions.filter(p => p.strategy === strategy);
         }
 
+        if (!leagues) {
+            predictions = SlipService.filterAndRankByLeagueQuality(predictions, 15);
+        }
+
         res.json({ strategy: strategy, matches: predictions });
     } catch (error) {
         console.error('Error fetching matches:', error.message);

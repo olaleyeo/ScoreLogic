@@ -343,7 +343,9 @@ Do NOT use markdown formatting (no asterisks). Use plain text and capitalization
             throw new Error("No upcoming fixtures found for the selected teams.");
         }
 
-        let prompt = `Act as an expert football betting AI. I have a list of upcoming matches. For EACH match, analyze the teams and select exactly 3 high-probability betting markets (e.g., Home Win, Over 1.5 Goals, Over 8.5 Corners, BTTS - Yes) that can be combined into a single-match Bet Builder for high odds. \n\nMatches:\n`;
+        let prompt = `Act as an expert football betting AI. I have a list of upcoming matches.
+RULE: Avoid lower-division leagues, unpopular competitions, and matches without sufficient statistics for reliable AI judgment. Prioritize popular top-flight leagues with rich statistical data, and only use lower/unpopular leagues when popular leagues with sufficient data are not available.
+For EACH match with sufficient statistical backing, analyze the teams and select exactly 3 high-probability betting markets (e.g., Home Win, Over 1.5 Goals, Over 8.5 Corners, BTTS - Yes) that can be combined into a single-match Bet Builder for high odds. \n\nMatches:\n`;
         
         uniqueMatches.forEach((m, i) => {
             prompt += `${i + 1}. ${m.home} vs ${m.away} (${m.league}). Recent H2H: ${m.h2h}\n`;
@@ -681,6 +683,125 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
         return 1.55;
     }
 
+    /**
+     * Classifies a fixture's league popularity, division tier, and statistical sufficiency.
+     * Used across all slip generators to avoid lower-division/unpopular leagues and
+     * statistically thin matches unless popular leagues with sufficient data are unavailable.
+     */
+    static classifyFixtureLeagueAndStats(item, vaultOddsMap = new Map()) {
+        const matchId = String(item.fixture?.id || item.matchId || '');
+        const leagueId = Number(item.league?.id || item.leagueId || 0);
+        const country = (item.league?.country || '').toLowerCase().trim();
+        const leagueName = (typeof item.league === 'string' ? item.league : item.league?.name || '').toLowerCase().trim();
+        const homeName = (item.teams?.home?.name || item.homeTeam || '').toLowerCase().trim();
+        const awayName = (item.teams?.away?.name || item.awayTeam || '').toLowerCase().trim();
+        const combinedText = `${country} ${leagueName} ${homeName} ${awayName}`;
+
+        // Youth, reserve, women, amateur, or friendly matches
+        const isYouthOrFriendly = /\b(u17|u18|u19|u20|u21|u23|reserves|reserve|women|feminine|femenina|feminin|frauen|damallsvenskan|friendly|friendlies|amateur|youth)\b/i.test(combinedText);
+
+        // Lower-division (2nd/3rd/4th/5th+ tier) and regional leagues to avoid when top-flight popular leagues are available
+        const isLowerDivisionPattern =
+            /\b(national league|non league|isthmian|southern league|northern premier|league two|league one|championship|segunda|serie b|serie c|serie d|primavera|2\. bundesliga|3\. liga|regionalliga|oberliga|landesliga|ligue 2|national 1|national 2|national 3|championnat national|eerste divisie|tweede divisie|derde divisie|segunda liga|liga portugal 2|2\. liga|1st division|1\. division|2nd division|2\. division|3\. division|4\. division|division 1|division 2|division 3|third league|fourth league|second league|first league|highland league|lowland league|primera federaci|segunda federaci|tercera|challenger pro|1b pro|superettan|obos-ligaen|ykkosliiga|ykkösliiga|serie b|primera b|regional|state|provincial|group [a-z0-9])\b/i.test(
+                `${country} ${leagueName}`
+            ) &&
+            // Exceptions where "First League" / "Division 1" is actually the country's top flight
+            !['bulgaria', 'czech-republic', 'czechia', 'cyprus'].includes(country);
+
+        // Top-flight Popular League IDs (API-Sports)
+        const POPULAR_TOP_LEAGUE_IDS = new Set([
+            2, 3, 848, 5, 1, 4, 9, 15, // UEFA CL, UEL, UECL, Nations League, World Cup, Euro, Copa America, Club WC
+            39, 45, 48,                // England: Premier League, FA Cup, EFL Cup
+            140, 143,                  // Spain: La Liga, Copa del Rey
+            135, 137,                  // Italy: Serie A, Coppa Italia
+            78, 81,                    // Germany: Bundesliga, DFB Pokal
+            61, 66,                    // France: Ligue 1, Coupe de France
+            88, 90,                    // Netherlands: Eredivisie, KNVB Beker
+            94, 96,                    // Portugal: Primeira Liga, Taca de Portugal
+            179, 181, 185,             // Scotland: Premiership, Scottish Cup, League Cup
+            144,                       // Belgium: Jupiler Pro League
+            203,                       // Turkey: Super Lig
+            218,                       // Austria: Bundesliga
+            119,                       // Denmark: Superliga
+            103,                       // Norway: Eliteserien
+            113,                       // Sweden: Allsvenskan
+            207,                       // Switzerland: Super League
+            197,                       // Greece: Super League 1
+            210,                       // Croatia: HNL
+            345,                       // Czechia: Chance Liga
+            106,                       // Poland: Ekstraklasa
+            283,                       // Romania: Liga I
+            172,                       // Bulgaria: First Professional League
+            71,                        // Brazil: Serie A
+            128,                       // Argentina: Liga Profesional
+            253,                       // USA: MLS
+            262,                       // Mexico: Liga MX
+            307                        // Saudi Arabia: Pro League
+        ]);
+
+        const POPULAR_COUNTRIES = new Set([
+            'england', 'spain', 'germany', 'italy', 'france', 'portugal',
+            'netherlands', 'scotland', 'turkey', 'austria', 'belgium',
+            'bulgaria', 'croatia', 'czech-republic', 'czechia', 'denmark',
+            'norway', 'sweden', 'switzerland', 'greece', 'poland', 'romania',
+            'brazil', 'argentina', 'usa', 'mexico', 'saudi-arabia', 'world', 'europe'
+        ]);
+
+        const POPULAR_TOP_LEAGUE_NAMES = [
+            'premier league', 'la liga', 'primera división', 'serie a', 'bundesliga',
+            'ligue 1', 'champions league', 'europa league', 'conference league',
+            'eredivisie', 'primeira liga', 'liga portugal', 'premiership',
+            'süper lig', 'super lig', 'jupiler pro league', 'pro league',
+            'superliga', 'eliteserien', 'allsvenskan', 'super league',
+            'hnl', 'chance liga', '1. liga', 'ekstraklasa', 'liga i',
+            'parva liga', 'first league', 'liga profesional', 'brasileiro',
+            'mls', 'liga mx', 'fa cup', 'efl cup', 'league cup', 'carabao cup',
+            'dfb pokal', 'copa del rey', 'coppa italia', 'coupe de france', 'knvb beker'
+        ];
+
+        const isPopularTopLeague =
+            !isYouthOrFriendly &&
+            !isLowerDivisionPattern &&
+            (POPULAR_TOP_LEAGUE_IDS.has(leagueId) ||
+                (POPULAR_COUNTRIES.has(country) &&
+                    POPULAR_TOP_LEAGUE_NAMES.some(kw => leagueName.includes(kw))));
+
+        const isLowerOrUnpopular = isYouthOrFriendly || isLowerDivisionPattern || !isPopularTopLeague;
+
+        const hasVaultOdds = vaultOddsMap.has(matchId) || Boolean(item._mockOdds);
+        const cachedEnrich = this.enrichmentCache?.[matchId]?.data;
+        const hasCachedApiStats = Boolean(
+            cachedEnrich &&
+                (cachedEnrich.homeRecord !== 'N/A' ||
+                    cachedEnrich.homeForm !== 'N/A' ||
+                    cachedEnrich.h2hSummary !== 'N/A')
+        );
+
+        const hasSufficientStats = hasVaultOdds || hasCachedApiStats || isPopularTopLeague;
+
+        // Tier 1: Popular top-flight league + verified bookmaker/API stats
+        // Tier 2: Popular top-flight league (will be enriched via API-Sports before AI eval)
+        // Tier 3: Recognised secondary/lower division WITH verified bookmaker/API stats (fallback only)
+        // Tier 4: Unpopular / lower division without stats (last resort)
+        let tier = 4;
+        if (isPopularTopLeague && (hasVaultOdds || hasCachedApiStats)) {
+            tier = 1;
+        } else if (isPopularTopLeague) {
+            tier = 2;
+        } else if (!isYouthOrFriendly && (hasVaultOdds || hasCachedApiStats)) {
+            tier = 3;
+        }
+
+        return {
+            tier,
+            isPopularTopLeague,
+            isLowerOrUnpopular,
+            isYouthOrFriendly,
+            hasSufficientStats,
+            hasVaultOdds
+        };
+    }
+
     static async generateMyTeams14DayAiSlip(trackedTeams = [], options = {}) {
         const apiKey = process.env.API_FOOTBALL_KEY;
         const groqKey = process.env.GROQ_API_KEY;
@@ -935,17 +1056,35 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             console.error('Vault lookup warning:', err.message);
         }
 
-        // Prioritize fixtures that have published bookmaker odds in VaultMatch or are the next upcoming fixture per team (cap at 42 fixtures so Groq responds in <5s without hitting 8k TPM limits)
+        // Prioritize popular top-flight leagues with sufficient statistics; avoid lower-division/unpopular leagues unless popular ones are unavailable
+        const classified14Day = candidates.map(item => ({
+            item,
+            meta: this.classifyFixtureLeagueAndStats(item, vaultOddsMap)
+        }));
+
+        const popular14Day = classified14Day
+            .filter(c => c.meta.isPopularTopLeague)
+            .sort((a, b) => {
+                if (a.meta.tier !== b.meta.tier) return a.meta.tier - b.meta.tier;
+                return new Date(a.item.fixture.date) - new Date(b.item.fixture.date);
+            })
+            .map(c => c.item);
+
+        const fallback14Day = classified14Day
+            .filter(c => !c.meta.isPopularTopLeague && !c.meta.isYouthOrFriendly)
+            .sort((a, b) => {
+                if (a.meta.tier !== b.meta.tier) return a.meta.tier - b.meta.tier;
+                return new Date(a.item.fixture.date) - new Date(b.item.fixture.date);
+            })
+            .map(c => c.item);
+
+        // Only include lower-division/unpopular leagues if popular leagues do not provide enough matches
+        const orderedPool14Day =
+            popular14Day.length >= 20 ? popular14Day : [...popular14Day, ...fallback14Day];
+
         const teamCountMap = new Map();
         const prioritizedCandidates = [];
-        const sortedForSelection = [...candidates].sort((a, b) => {
-            const aHasVault = vaultOddsMap.has(String(a.fixture.id)) ? 1 : 0;
-            const bHasVault = vaultOddsMap.has(String(b.fixture.id)) ? 1 : 0;
-            if (bHasVault !== aHasVault) return bHasVault - aHasVault;
-            return new Date(a.fixture.date) - new Date(b.fixture.date);
-        });
-
-        for (const item of sortedForSelection) {
+        for (const item of orderedPool14Day) {
             if (prioritizedCandidates.length >= 42) break;
             const hKey = (item.teams?.home?.name || '').toLowerCase();
             const aKey = (item.teams?.away?.name || '').toLowerCase();
@@ -1097,40 +1236,46 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             });
         }
 
-        const PRIORITY_COUNTRIES = new Set([
-            'england', 'spain', 'germany', 'italy', 'france', 'portugal',
-            'netherlands', 'scotland', 'turkey', 'austria', 'belgium',
-            'bulgaria', 'croatia', 'czech-republic', 'czechia', 'denmark',
-            'norway', 'switzerland', 'greece', 'poland', 'romania', 'sweden',
-            'brazil', 'argentina', 'colombia', 'chile', 'usa', 'mexico',
-            'world', 'europe'
-        ]);
+        // Classify today's fixtures by League Popularity & Statistical Sufficiency
+        const classifiedToday = eligibleToday.map(item => ({
+            item,
+            meta: this.classifyFixtureLeagueAndStats(item, vaultOddsMap)
+        }));
 
-        const isYouthOrFriendly = item => {
-            const text = `${item.league?.name || ''} ${item.teams?.home?.name || ''} ${item.teams?.away?.name || ''}`;
-            return /\b(u17|u18|u19|u20|u21|u23|reserves|reserve|women|friendly|amateur)\b/i.test(text);
-        };
+        // Primary pool: Popular top-flight leagues & major cups (avoiding lower-division/unpopular leagues)
+        const popularToday = classifiedToday
+            .filter(c => c.meta.isPopularTopLeague)
+            .sort((a, b) => {
+                if (a.meta.tier !== b.meta.tier) return a.meta.tier - b.meta.tier;
+                return new Date(a.item.fixture.date) - new Date(b.item.fixture.date);
+            })
+            .map(c => c.item);
 
-        const sortedToday = [...eligibleToday].sort((a, b) => {
-            const aVault = vaultOddsMap.has(String(a.fixture?.id)) ? 1 : 0;
-            const bVault = vaultOddsMap.has(String(b.fixture?.id)) ? 1 : 0;
-            if (bVault !== aVault) return bVault - aVault;
+        // Secondary fallback pool (ONLY used if popular top-flight leagues do not have enough games today):
+        // Prioritize matches that at least have verified bookmaker/API statistics (tier === 3) before tier 4
+        const fallbackWithStatsToday = classifiedToday
+            .filter(c => !c.meta.isPopularTopLeague && !c.meta.isYouthOrFriendly && c.meta.tier === 3)
+            .sort((a, b) => new Date(a.item.fixture.date) - new Date(b.item.fixture.date))
+            .map(c => c.item);
 
-            const aYouth = isYouthOrFriendly(a) ? 1 : 0;
-            const bYouth = isYouthOrFriendly(b) ? 1 : 0;
-            if (aYouth !== bYouth) return aYouth - bYouth;
+        const fallbackLastResortToday = classifiedToday
+            .filter(c => !c.meta.isPopularTopLeague && !c.meta.isYouthOrFriendly && c.meta.tier > 3)
+            .sort((a, b) => new Date(a.item.fixture.date) - new Date(b.item.fixture.date))
+            .map(c => c.item);
 
-            const aPri = PRIORITY_COUNTRIES.has((a.league?.country || '').toLowerCase()) ? 1 : 0;
-            const bPri = PRIORITY_COUNTRIES.has((b.league?.country || '').toLowerCase()) ? 1 : 0;
-            if (bPri !== aPri) return bPri - aPri;
-
-            return new Date(a.fixture.date) - new Date(b.fixture.date);
-        });
+        // Strictly avoid lower-division/unpopular leagues when popular leagues have sufficient fixtures (>= 16)
+        let orderedTodayPool = popularToday;
+        if (orderedTodayPool.length < 16) {
+            orderedTodayPool = [...popularToday, ...fallbackWithStatsToday];
+        }
+        if (orderedTodayPool.length < 16) {
+            orderedTodayPool = [...orderedTodayPool, ...fallbackLastResortToday];
+        }
 
         // Deduplicate and take top 36 fixtures for today so Groq evaluates all of them in <5s
         const seenIds = new Set();
         const prioritizedCandidates = [];
-        for (const item of sortedToday) {
+        for (const item of orderedTodayPool) {
             const id = String(item.fixture?.id || '');
             if (!id || seenIds.has(id)) continue;
             seenIds.add(id);
@@ -1156,10 +1301,10 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
         prioritizedCandidates,
         { vaultOddsMap, teamScheduleMap, minConfidence = 70, maxGames = 20, apiKey, groqKey }
     ) {
-        // Enrich top 6 uncached fixtures in parallel (fast timeout so request never hangs)
+        // Enrich up to 12 uncached fixtures in parallel so the AI has verified API-Sports statistics
         const uncachedTop = prioritizedCandidates
             .filter(c => !this.enrichmentCache[String(c.fixture.id)])
-            .slice(0, 6);
+            .slice(0, 12);
         if (apiKey && apiKey !== 'your_api_key_here' && uncachedTop.length > 0) {
             await Promise.allSettled(
                 uncachedTop.map(c => this.fetchFixtureEnrichmentCached(String(c.fixture.id), apiKey))
@@ -1228,6 +1373,8 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
                 Object.assign(availableOdds, item._mockOdds);
             }
 
+            const leagueMeta = this.classifyFixtureLeagueAndStats(item, vaultOddsMap);
+
             return {
                 matchId,
                 homeTeam,
@@ -1235,6 +1382,7 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
                 league,
                 round,
                 kickoffTime,
+                leagueMeta,
                 zeroZeroOdds: vaultMatch?.correctScoreOdds?.['0:0'] || item._zeroZeroOdds || null,
                 homeForm: enrich.homeForm || 'N/A',
                 awayForm: enrich.awayForm || 'N/A',
@@ -1280,7 +1428,8 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
                 const statsLine = m.homeRecord !== 'N/A'
                     ? ` | H:${m.homeRecord}(${m.homeGoals}) A:${m.awayRecord}(${m.awayGoals}) Inj:${m.injuriesAndSuspensions}`
                     : '';
-                return `Item ${i + 1} | matchId: "${m.matchId}" | ${m.homeTeam} vs ${m.awayTeam} (${m.league} - ${m.round}, ${m.kickoffTime.split('T')[0]}) | H_Sched:${m.homeSchedule} | A_Sched:${m.awaySchedule} | Odds:${oddsStr}${statsLine}`;
+                const tierTag = m.leagueMeta?.isPopularTopLeague ? 'PopularTopLeague' : 'FallbackLeague';
+                return `Item ${i + 1} | matchId: "${m.matchId}" | ${m.homeTeam} vs ${m.awayTeam} (${m.league} - ${m.round}, ${m.kickoffTime.split('T')[0]}) [${tierTag}] | H_Sched:${m.homeSchedule} | A_Sched:${m.awaySchedule} | Odds:${oddsStr}${statsLine}`;
             }).join('\n');
 
             const systemPrompt = `You are a strict quantitative football betting analyst.
@@ -1291,7 +1440,8 @@ Evaluate EVERY match in the input list by strictly considering ALL of:
 4. Underdog Dynamics (giant-killing threat, low-block resilience, trap games)
 5. First-Team Injuries & Suspensions (impact of missing key starters)
 6. Importance of the Game (title race, European spots, relegation battle, cup tie, derby)
-7. Upcoming Game & Manager Rotation (check H_Sched & A_Sched: if a team has a Champions League, Europa League, cup knockout, or major clash within 3-4 days, account for managers resting first-team players!).
+7. Upcoming Game & Manager Rotation (check H_Sched & A_Sched: if a team has a Champions League, Europa League, cup knockout, or major clash within 3-4 days, account for managers resting first-team players!)
+8. League Quality & Statistical Sufficiency: Avoid lower-division leagues, unpopular leagues, and matches without sufficient statistics for better AI judgment. Prioritize [PopularTopLeague] matches with strong statistical backing, and only include [FallbackLeague] matches when popular leagues with sufficient data are not available.
 
 ALLOWED MARKETS (Strictly diversify picks across these categories based on each match's best edge — DO NOT default everything to Over 1.5!):
 - "Home Win"
@@ -1351,6 +1501,8 @@ ${matchDescriptions}`;
                     };
                     if (modelName.startsWith('openai/')) {
                         reqOpts.reasoning_effort = 'low';
+                    } else if (modelName.startsWith('qwen/')) {
+                        reqOpts.max_tokens = 950;
                     }
 
                     const completion = await groq.chat.completions.create(reqOpts);
@@ -1426,6 +1578,12 @@ ${matchDescriptions}`;
                     ? Number(ev.marketOdds)
                     : this.estimateDefaultOdds(chosenMarket);
 
+            const hasStats = Boolean(
+                m.leagueMeta?.hasSufficientStats ||
+                    m.homeRecord !== 'N/A' ||
+                    Object.keys(m.availableOdds).length > 0
+            );
+
             evaluatedMatches.push({
                 matchId: m.matchId,
                 league: m.league,
@@ -1441,18 +1599,44 @@ ${matchDescriptions}`;
                 rotationRisk: ev.rotationRisk || 'Low',
                 gameImportance: ev.gameImportance || m.round,
                 reasoning: ev.reasoning || 'AI high-conviction pick based on form, injuries, and schedule analysis.',
-                strategy: 'AI_Strict_MultiMarket'
+                strategy: 'AI_Strict_MultiMarket',
+                isPopularTopLeague: Boolean(m.leagueMeta?.isPopularTopLeague),
+                hasSufficientStats: hasStats
             });
         }
 
-        // Prioritize HIGHER confidence first when adding games to the slip, capped at maxGames (20)
-        evaluatedMatches.sort((a, b) => {
+        const sortByConfidenceThenTime = (a, b) => {
             if (b.confidence !== a.confidence) return b.confidence - a.confidence;
             return new Date(a.kickoffTime) - new Date(b.kickoffTime);
-        });
+        };
+
+        // Primary picks: Popular top-flight leagues with sufficient statistical backing
+        const popularPicks = evaluatedMatches
+            .filter(m => m.isPopularTopLeague && m.hasSufficientStats)
+            .sort(sortByConfidenceThenTime);
+
+        // Secondary fallback picks: Only used if popular top-flight leagues do not fill the slip
+        const fallbackWithStatsPicks = evaluatedMatches
+            .filter(m => !(m.isPopularTopLeague && m.hasSufficientStats) && m.hasSufficientStats)
+            .sort(sortByConfidenceThenTime);
+
+        const fallbackRemainingPicks = evaluatedMatches
+            .filter(m => !m.hasSufficientStats)
+            .sort(sortByConfidenceThenTime);
+
+        let finalSlipMatches = [...popularPicks];
+        if (finalSlipMatches.length < maxGames) {
+            finalSlipMatches = [...finalSlipMatches, ...fallbackWithStatsPicks].slice(0, maxGames);
+        }
+        if (finalSlipMatches.length < maxGames) {
+            finalSlipMatches = [...finalSlipMatches, ...fallbackRemainingPicks].slice(0, maxGames);
+        }
+
+        // Sort final selected matches by highest AI confidence first
+        finalSlipMatches = finalSlipMatches.slice(0, maxGames).sort(sortByConfidenceThenTime);
 
         return {
-            matches: evaluatedMatches.slice(0, maxGames),
+            matches: finalSlipMatches,
             totalEvaluated: preparedMatches.length
         };
     }
