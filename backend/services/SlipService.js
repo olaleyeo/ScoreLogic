@@ -26,7 +26,7 @@ class SlipService {
         if (!match) return false;
         return Boolean(
             (match.zeroZeroOdds !== null && match.zeroZeroOdds !== undefined) ||
-                (match.marketOdds && Number(match.marketOdds) > 1.01)
+            (match.marketOdds && Number(match.marketOdds) > 1.01)
         );
     }
 
@@ -68,7 +68,7 @@ class SlipService {
 
         // For each strategy, we can generate slips.
         // Let's generate a 2-odds, 3-odds, 5-odds slip for each strategy if possible, to keep slips homogeneous.
-        
+
         for (const [strategy, matches] of Object.entries(strategyGroups)) {
             let availableMatches = this.filterAndRankByLeagueQuality(matches, 12);
 
@@ -123,7 +123,7 @@ class SlipService {
 
         for (const match of availableMatches) {
             if (usedMatchIds.has(match.matchId)) continue;
-            
+
             if (currentOdds >= targetOdds) break; // Reached target
             if (selectedMatches.length >= maxGames) break; // Reached max games
 
