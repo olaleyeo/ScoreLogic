@@ -697,26 +697,15 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
         const awayName = (item.teams?.away?.name || item.awayTeam || '').toLowerCase().trim();
         const combinedText = `${country} ${leagueName} ${homeName} ${awayName}`;
 
-        // Youth, reserve, women, amateur, or friendly matches
-        const isYouthOrFriendly = /\b(u17|u18|u19|u20|u21|u23|reserves|reserve|women|feminine|femenina|feminin|frauen|damallsvenskan|friendly|friendlies|amateur|youth)\b/i.test(combinedText);
-
-        // Lower-division (2nd/3rd/4th/5th+ tier) and regional leagues to avoid when top-flight popular leagues are available
-        const isLowerDivisionPattern =
-            /\b(national league|non league|isthmian|southern league|northern premier|league two|league one|championship|segunda|serie b|serie c|serie d|primavera|2\. bundesliga|3\. liga|regionalliga|oberliga|landesliga|ligue 2|national 1|national 2|national 3|championnat national|eerste divisie|tweede divisie|derde divisie|segunda liga|liga portugal 2|2\. liga|1st division|1\. division|2nd division|2\. division|3\. division|4\. division|division 1|division 2|division 3|third league|fourth league|second league|first league|highland league|lowland league|primera federaci|segunda federaci|tercera|challenger pro|1b pro|superettan|obos-ligaen|ykkosliiga|ykkösliiga|serie b|primera b|regional|state|provincial|group [a-z0-9])\b/i.test(
-                `${country} ${leagueName}`
-            ) &&
-            // Exceptions where "First League" / "Division 1" is actually the country's top flight
-            !['bulgaria', 'czech-republic', 'czechia', 'cyprus'].includes(country);
-
-        // Top-flight Popular League IDs (API-Sports)
-        const POPULAR_TOP_LEAGUE_IDS = new Set([
-            2, 3, 848, 5, 1, 4, 9, 15, // UEFA CL, UEL, UECL, Nations League, World Cup, Euro, Copa America, Club WC
+        // Prestige Rank 1: Elite European Top Flights, UEFA Competitions, Dutch Eredivisie & Eerste Divisie, and Major Domestic Cups
+        const PRESTIGE_RANK_1_IDS = new Set([
+            2, 3, 848, 5, 1, 4,        // UEFA Champions League, Europa League, Conference League, Nations League, World Cup, Euro
             39, 45, 48,                // England: Premier League, FA Cup, EFL Cup
             140, 143,                  // Spain: La Liga, Copa del Rey
             135, 137,                  // Italy: Serie A, Coppa Italia
             78, 81,                    // Germany: Bundesliga, DFB Pokal
             61, 66,                    // France: Ligue 1, Coupe de France
-            88, 90,                    // Netherlands: Eredivisie, KNVB Beker
+            88, 89, 90,                // Netherlands: Eredivisie, Eerste Divisie, KNVB Beker
             94, 96,                    // Portugal: Primeira Liga, Taca de Portugal
             179, 181, 185,             // Scotland: Premiership, Scottish Cup, League Cup
             144,                       // Belgium: Jupiler Pro League
@@ -724,49 +713,94 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             218,                       // Austria: Bundesliga
             119,                       // Denmark: Superliga
             103,                       // Norway: Eliteserien
-            113,                       // Sweden: Allsvenskan
+            113                        // Sweden: Allsvenskan
+        ]);
+
+        // Prestige Rank 2: Major European Professional 2nd Divisions & Popular European Top Flights with Rich Stats
+        const PRESTIGE_RANK_2_IDS = new Set([
+            40,                        // England: Championship
+            141,                       // Spain: Segunda Division (La Liga 2)
+            136,                       // Italy: Serie B
+            79,                        // Germany: 2. Bundesliga
+            62,                        // France: Ligue 2
+            95,                        // Portugal: Segunda Liga (Liga Portugal 2)
+            120,                       // Denmark: 1st Division
+            114,                       // Sweden: Superettan
+            219,                       // Austria: 2. Liga
             207,                       // Switzerland: Super League
-            197,                       // Greece: Super League 1
             210,                       // Croatia: HNL
             345,                       // Czechia: Chance Liga
-            106,                       // Poland: Ekstraklasa
+            106                        // Poland: Ekstraklasa
+        ]);
+
+        // Prestige Rank 3: Secondary Top-Flight Leagues (Only used if Rank 1 & Rank 2 European leagues don't have enough games)
+        const PRESTIGE_RANK_3_IDS = new Set([
+            197,                       // Greece: Super League 1
             283,                       // Romania: Liga I
             172,                       // Bulgaria: First Professional League
             71,                        // Brazil: Serie A
             128,                       // Argentina: Liga Profesional
             253,                       // USA: MLS
             262,                       // Mexico: Liga MX
-            307                        // Saudi Arabia: Pro League
+            307,                       // Saudi Arabia: Pro League
+            17,                        // AFC Champions League Elite
+            13                         // CONMEBOL Libertadores
         ]);
 
-        const POPULAR_COUNTRIES = new Set([
-            'england', 'spain', 'germany', 'italy', 'france', 'portugal',
-            'netherlands', 'scotland', 'turkey', 'austria', 'belgium',
-            'bulgaria', 'croatia', 'czech-republic', 'czechia', 'denmark',
-            'norway', 'sweden', 'switzerland', 'greece', 'poland', 'romania',
-            'brazil', 'argentina', 'usa', 'mexico', 'saudi-arabia', 'world', 'europe'
-        ]);
+        const isKnownProLeague =
+            PRESTIGE_RANK_1_IDS.has(leagueId) ||
+            PRESTIGE_RANK_2_IDS.has(leagueId) ||
+            PRESTIGE_RANK_3_IDS.has(leagueId);
 
-        const POPULAR_TOP_LEAGUE_NAMES = [
-            'premier league', 'la liga', 'primera división', 'serie a', 'bundesliga',
-            'ligue 1', 'champions league', 'europa league', 'conference league',
-            'eredivisie', 'primeira liga', 'liga portugal', 'premiership',
-            'süper lig', 'super lig', 'jupiler pro league', 'pro league',
-            'superliga', 'eliteserien', 'allsvenskan', 'super league',
-            'hnl', 'chance liga', '1. liga', 'ekstraklasa', 'liga i',
-            'parva liga', 'first league', 'liga profesional', 'brasileiro',
-            'mls', 'liga mx', 'fa cup', 'efl cup', 'league cup', 'carabao cup',
-            'dfb pokal', 'copa del rey', 'coppa italia', 'coupe de france', 'knvb beker'
+        // Youth, reserve, women, amateur, or friendly matches
+        // Note: In Dutch Eerste Divisie (89), teams like "Jong PSV U21" are official professional league clubs, so only check leagueName for known pro leagues
+        const textForYouthCheck = isKnownProLeague ? `${country} ${leagueName}` : combinedText;
+        const isYouthOrFriendly = /\b(u17|u18|u19|u20|u21|u23|reserves|reserve|women|feminine|femenina|feminin|frauen|damallsvenskan|toppserien|friendly|friendlies|amateur|youth)\b/i.test(
+            textForYouthCheck
+        );
+
+        // Lower-division (3rd/4th/5th+ tier) and regional leagues to avoid
+        const isLowerDivisionPattern =
+            !PRESTIGE_RANK_1_IDS.has(leagueId) &&
+            !PRESTIGE_RANK_2_IDS.has(leagueId) &&
+            /\b(national league|non league|isthmian|southern league|northern premier|league two|league one|3\. liga|regionalliga|oberliga|landesliga|serie c|serie d|primavera|national 1|national 2|national 3|championnat national|tweede divisie|derde divisie|3\. division|4\. division|division 2|division 3|third league|fourth league|second league|highland league|lowland league|primera federaci|segunda federaci|tercera|challenger pro|1b pro|obos-ligaen|ykkosliiga|ykkösliiga|primera b|super league 2|1\. lig|i liga|ii liga|fnl|regional|state|provincial|group [a-z0-9])\b/i.test(
+                `${country} ${leagueName}`
+            );
+
+        // Name-based fallback for mock data or fixtures without leagueId
+        const POPULAR_RANK_1_NAMES = [
+            'premier league', 'epl', 'la liga', 'serie a', 'bundesliga',
+            'ligue 1', 'uefa champions league', 'uefa europa league', 'uefa conference league',
+            'eredivisie', 'eerste divisie', 'primeira liga', 'liga portugal', 'premiership',
+            'süper lig', 'super lig', 'jupiler pro league', 'superliga', 'eliteserien', 'allsvenskan',
+            'fa cup', 'efl cup', 'league cup', 'carabao cup', 'dfb pokal', 'copa del rey', 'coppa italia', 'coupe de france', 'knvb beker'
         ];
 
-        const isPopularTopLeague =
-            !isYouthOrFriendly &&
-            !isLowerDivisionPattern &&
-            (POPULAR_TOP_LEAGUE_IDS.has(leagueId) ||
-                (POPULAR_COUNTRIES.has(country) &&
-                    POPULAR_TOP_LEAGUE_NAMES.some(kw => leagueName.includes(kw))));
+        const POPULAR_RANK_2_NAMES = [
+            'championship', 'segunda división', 'serie b', '2. bundesliga', 'ligue 2',
+            'segunda liga', '1st division', 'superettan', 'ekstraklasa', 'hnl', 'chance liga', 'super league'
+        ];
 
-        const isLowerOrUnpopular = isYouthOrFriendly || isLowerDivisionPattern || !isPopularTopLeague;
+        let prestigeRank = 4;
+        if (!isYouthOrFriendly && !isLowerDivisionPattern) {
+            if (
+                PRESTIGE_RANK_1_IDS.has(leagueId) ||
+                (!leagueId && POPULAR_RANK_1_NAMES.some(kw => leagueName.includes(kw)))
+            ) {
+                prestigeRank = 1;
+            } else if (
+                PRESTIGE_RANK_2_IDS.has(leagueId) ||
+                (!leagueId && POPULAR_RANK_2_NAMES.some(kw => leagueName.includes(kw)))
+            ) {
+                prestigeRank = 2;
+            } else if (PRESTIGE_RANK_3_IDS.has(leagueId)) {
+                prestigeRank = 3;
+            }
+        }
+
+        const isPopularTopLeague = prestigeRank === 1 || prestigeRank === 2;
+        const isSecondaryLeague = prestigeRank === 3;
+        const isLowerOrUnpopular = prestigeRank === 4 || isYouthOrFriendly;
 
         const hasVaultOdds = vaultOddsMap.has(matchId) || Boolean(item._mockOdds);
         const cachedEnrich = this.enrichmentCache?.[matchId]?.data;
@@ -777,24 +811,29 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
                     cachedEnrich.h2hSummary !== 'N/A')
         );
 
-        const hasSufficientStats = hasVaultOdds || hasCachedApiStats || isPopularTopLeague;
+        const hasSufficientStats = hasVaultOdds || hasCachedApiStats || isPopularTopLeague || isSecondaryLeague;
 
-        // Tier 1: Popular top-flight league + verified bookmaker/API stats
-        // Tier 2: Popular top-flight league (will be enriched via API-Sports before AI eval)
-        // Tier 3: Recognised secondary/lower division WITH verified bookmaker/API stats (fallback only)
-        // Tier 4: Unpopular / lower division without stats (last resort)
-        let tier = 4;
-        if (isPopularTopLeague && (hasVaultOdds || hasCachedApiStats)) {
+        // Tier 1: Prestige Rank 1 (Elite European Top Flight / Dutch / UEFA)
+        // Tier 2: Prestige Rank 2 (Popular European 2nd Div & Top Flights)
+        // Tier 3: Prestige Rank 3 (Secondary Top-Flight Leagues - fallback only when Rank 1+2 < 20)
+        // Tier 4: Lower division / unpopular WITH verified odds/stats (deep fallback only)
+        // Tier 5: Lower division / unpopular without stats
+        let tier = 5;
+        if (prestigeRank === 1) {
             tier = 1;
-        } else if (isPopularTopLeague) {
+        } else if (prestigeRank === 2) {
             tier = 2;
-        } else if (!isYouthOrFriendly && (hasVaultOdds || hasCachedApiStats)) {
+        } else if (prestigeRank === 3) {
             tier = 3;
+        } else if (!isYouthOrFriendly && (hasVaultOdds || hasCachedApiStats)) {
+            tier = 4;
         }
 
         return {
             tier,
+            prestigeRank,
             isPopularTopLeague,
+            isSecondaryLeague,
             isLowerOrUnpopular,
             isYouthOrFriendly,
             hasSufficientStats,
@@ -1236,43 +1275,54 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             });
         }
 
-        // Classify today's fixtures by League Popularity & Statistical Sufficiency
+        // Classify today's fixtures by League Prestige & Statistical Sufficiency
         const classifiedToday = eligibleToday.map(item => ({
             item,
             meta: this.classifyFixtureLeagueAndStats(item, vaultOddsMap)
         }));
 
-        // Primary pool: Popular top-flight leagues & major cups (avoiding lower-division/unpopular leagues)
-        const popularToday = classifiedToday
-            .filter(c => c.meta.isPopularTopLeague)
-            .sort((a, b) => {
-                if (a.meta.tier !== b.meta.tier) return a.meta.tier - b.meta.tier;
-                return new Date(a.item.fixture.date) - new Date(b.item.fixture.date);
-            })
+        const sortByPrestigeAndTime = (a, b) => {
+            if (a.meta.prestigeRank !== b.meta.prestigeRank) return a.meta.prestigeRank - b.meta.prestigeRank;
+            if (a.meta.hasVaultOdds !== b.meta.hasVaultOdds) return (b.meta.hasVaultOdds ? 1 : 0) - (a.meta.hasVaultOdds ? 1 : 0);
+            return new Date(a.item.fixture.date) - new Date(b.item.fixture.date);
+        };
+
+        // Primary pool: Prestige Rank 1 & Rank 2 (Popular European Top Flights, Dutch Eredivisie & Eerste Divisie, and Major European Professional Divisions)
+        const popularEuropeanToday = classifiedToday
+            .filter(c => c.meta.isPopularTopLeague && !c.meta.isYouthOrFriendly)
+            .sort(sortByPrestigeAndTime)
             .map(c => c.item);
 
-        // Secondary fallback pool (ONLY used if popular top-flight leagues do not have enough games today):
-        // Prioritize matches that at least have verified bookmaker/API statistics (tier === 3) before tier 4
+        // Secondary pool (Prestige Rank 3): Only used if Popular European leagues do not have enough games (< 20)
+        const secondaryTopToday = classifiedToday
+            .filter(c => c.meta.isSecondaryLeague && !c.meta.isYouthOrFriendly)
+            .sort(sortByPrestigeAndTime)
+            .map(c => c.item);
+
+        // Deep fallback pool: Lower-division/unpopular leagues WITH verified stats (Only used if Rank 1+2+3 < 20)
         const fallbackWithStatsToday = classifiedToday
-            .filter(c => !c.meta.isPopularTopLeague && !c.meta.isYouthOrFriendly && c.meta.tier === 3)
-            .sort((a, b) => new Date(a.item.fixture.date) - new Date(b.item.fixture.date))
+            .filter(c => !c.meta.isPopularTopLeague && !c.meta.isSecondaryLeague && !c.meta.isYouthOrFriendly && c.meta.tier === 4)
+            .sort(sortByPrestigeAndTime)
             .map(c => c.item);
 
         const fallbackLastResortToday = classifiedToday
-            .filter(c => !c.meta.isPopularTopLeague && !c.meta.isYouthOrFriendly && c.meta.tier > 3)
-            .sort((a, b) => new Date(a.item.fixture.date) - new Date(b.item.fixture.date))
+            .filter(c => !c.meta.isPopularTopLeague && !c.meta.isSecondaryLeague && !c.meta.isYouthOrFriendly && c.meta.tier > 4)
+            .sort(sortByPrestigeAndTime)
             .map(c => c.item);
 
-        // Strictly avoid lower-division/unpopular leagues when popular leagues have sufficient fixtures (>= 16)
-        let orderedTodayPool = popularToday;
-        if (orderedTodayPool.length < 16) {
-            orderedTodayPool = [...popularToday, ...fallbackWithStatsToday];
+        // Strictly avoid secondary/lower-division/unpopular leagues when Popular European leagues have sufficient fixtures (>= 20)
+        let orderedTodayPool = [...popularEuropeanToday];
+        if (orderedTodayPool.length < 20) {
+            orderedTodayPool = [...orderedTodayPool, ...secondaryTopToday];
         }
-        if (orderedTodayPool.length < 16) {
+        if (orderedTodayPool.length < 20) {
+            orderedTodayPool = [...orderedTodayPool, ...fallbackWithStatsToday];
+        }
+        if (orderedTodayPool.length < 20) {
             orderedTodayPool = [...orderedTodayPool, ...fallbackLastResortToday];
         }
 
-        // Deduplicate and take top 36 fixtures for today so Groq evaluates all of them in <5s
+        // Deduplicate and take up to 24 top-priority fixtures for today so Groq evaluates 100% of them in 3 fast batches of 8
         const seenIds = new Set();
         const prioritizedCandidates = [];
         for (const item of orderedTodayPool) {
@@ -1280,7 +1330,7 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             if (!id || seenIds.has(id)) continue;
             seenIds.add(id);
             prioritizedCandidates.push(item);
-            if (prioritizedCandidates.length >= 36) break;
+            if (prioritizedCandidates.length >= 24) break;
         }
 
         if (prioritizedCandidates.length === 0) {
@@ -1301,14 +1351,17 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
         prioritizedCandidates,
         { vaultOddsMap, teamScheduleMap, minConfidence = 70, maxGames = 20, apiKey, groqKey }
     ) {
-        // Enrich up to 12 uncached fixtures in parallel so the AI has verified API-Sports statistics
+        // Enrich up to 20 uncached fixtures in parallel so the AI has verified API-Sports statistics for every candidate
         const uncachedTop = prioritizedCandidates
             .filter(c => !this.enrichmentCache[String(c.fixture.id)])
-            .slice(0, 12);
+            .slice(0, 20);
         if (apiKey && apiKey !== 'your_api_key_here' && uncachedTop.length > 0) {
-            await Promise.allSettled(
-                uncachedTop.map(c => this.fetchFixtureEnrichmentCached(String(c.fixture.id), apiKey))
-            );
+            for (let i = 0; i < uncachedTop.length; i += 10) {
+                const chunk = uncachedTop.slice(i, i + 10);
+                await Promise.allSettled(
+                    chunk.map(c => this.fetchFixtureEnrichmentCached(String(c.fixture.id), apiKey))
+                );
+            }
         }
 
         // Build rich context objects for each candidate match
@@ -1420,6 +1473,43 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
             }
         }
 
+        const extractEvaluationArray = (rawContent) => {
+            if (!rawContent) return [];
+            try {
+                const parsed = JSON.parse(rawContent);
+                if (Array.isArray(parsed)) return parsed;
+                const arr =
+                    parsed.evaluations ||
+                    parsed.matches ||
+                    parsed.picks ||
+                    Object.values(parsed).find(v => Array.isArray(v));
+                if (Array.isArray(arr)) return arr;
+            } catch (_) {
+                const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    try {
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        const arr =
+                            parsed.evaluations ||
+                            parsed.matches ||
+                            parsed.picks ||
+                            Object.values(parsed).find(v => Array.isArray(v));
+                        if (Array.isArray(arr)) return arr;
+                    } catch (_) {}
+                }
+                // Partial object recovery if output was truncated near max_tokens
+                const objMatches = rawContent.match(/\{[^{}]*"matchId"[^{}]*\}/g) || [];
+                const recovered = [];
+                for (const objStr of objMatches) {
+                    try {
+                        recovered.push(JSON.parse(objStr));
+                    } catch (_) {}
+                }
+                if (recovered.length > 0) return recovered;
+            }
+            return [];
+        };
+
         const evaluateBatch = async (batch, batchIdx) => {
             const matchDescriptions = batch.map((m, i) => {
                 const oddsStr = Object.keys(m.availableOdds).length > 0
@@ -1463,7 +1553,7 @@ RULES:
 - You MUST return an evaluation object in the "evaluations" array for EVERY match in the input list (do not skip matches; return all ${batch.length} items).
 - Select a varied mix of Home Win, Away Win, Over/Under (Over 1.5, Over 2.5, Under 2.5, Under 3.5), BTTS - Yes/No, and Expected Corners (Over 8.5 Corners, Over 9.5 Corners, Over 10.5 Corners, Under 9.5 Corners) across the batch.
 - Avoid picking Home Win or Away Win if the win odds are below 1.20 — for heavy mismatches (win odds < 1.20), pick "Over 9.5 Corners", "Over 10.5 Corners", "Over 2.5", "Over 3.5", or "BTTS - No" for better value!
-- Ensure at least 2-3 matches per batch use an Expected Corners market ("Over 8.5 Corners", "Over 9.5 Corners", "Over 10.5 Corners") and at least 2-3 use "BTTS - Yes" or "BTTS - No" where wing play/attacking profiles fit.
+- Ensure at least 2 matches per batch use an Expected Corners market ("Over 8.5 Corners", "Over 9.5 Corners", "Over 10.5 Corners") and at least 2 use "BTTS - Yes" or "BTTS - No" where wing play/attacking profiles fit.
 - Assign a realistic confidence score (65-95) and set "includeInSlip": true if confidence >= 72, or false if < 72.
 - Output strictly valid JSON: {"evaluations": [...]}.`;
 
@@ -1506,16 +1596,9 @@ ${matchDescriptions}`;
                     }
 
                     const completion = await groq.chat.completions.create(reqOpts);
-
                     const rawContent = completion.choices[0]?.message?.content || '{}';
-                    let parsed = {};
-                    try {
-                        parsed = JSON.parse(rawContent);
-                    } catch (_) {
-                        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-                        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
-                    }
-                    const arr = parsed.evaluations || parsed.matches || parsed.picks || [];
+                    const arr = extractEvaluationArray(rawContent);
+
                     if (Array.isArray(arr) && arr.length >= Math.min(4, batch.length)) {
                         return arr.map((ev, idx) => {
                             let resolvedId = String(ev?.matchId || ev?.id || '').replace(/^#|^Item\s*/i, '').trim();
@@ -1538,7 +1621,7 @@ ${matchDescriptions}`;
         };
 
         if (uncachedMatches.length > 0) {
-            const batchSize = 14;
+            const batchSize = 8;
             const batches = [];
             for (let i = 0; i < uncachedMatches.length; i += batchSize) {
                 batches.push(uncachedMatches.slice(i, i + batchSize));
@@ -1600,24 +1683,31 @@ ${matchDescriptions}`;
                 gameImportance: ev.gameImportance || m.round,
                 reasoning: ev.reasoning || 'AI high-conviction pick based on form, injuries, and schedule analysis.',
                 strategy: 'AI_Strict_MultiMarket',
+                prestigeRank: m.leagueMeta?.prestigeRank || 4,
                 isPopularTopLeague: Boolean(m.leagueMeta?.isPopularTopLeague),
+                isSecondaryLeague: Boolean(m.leagueMeta?.isSecondaryLeague),
                 hasSufficientStats: hasStats
             });
         }
 
         const sortByConfidenceThenTime = (a, b) => {
             if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+            if (a.prestigeRank !== b.prestigeRank) return a.prestigeRank - b.prestigeRank;
             return new Date(a.kickoffTime) - new Date(b.kickoffTime);
         };
 
-        // Primary picks: Popular top-flight leagues with sufficient statistical backing
+        // Primary picks: Popular European leagues (Prestige Rank 1 & Rank 2, including Dutch Eredivisie & Eerste Divisie) with sufficient stats
         const popularPicks = evaluatedMatches
             .filter(m => m.isPopularTopLeague && m.hasSufficientStats)
             .sort(sortByConfidenceThenTime);
 
-        // Secondary fallback picks: Only used if popular top-flight leagues do not fill the slip
+        // Secondary fallback picks (Prestige Rank 3): Only used if Popular European leagues do not fill the slip
+        const secondaryWithStatsPicks = evaluatedMatches
+            .filter(m => !m.isPopularTopLeague && m.isSecondaryLeague && m.hasSufficientStats)
+            .sort(sortByConfidenceThenTime);
+
         const fallbackWithStatsPicks = evaluatedMatches
-            .filter(m => !(m.isPopularTopLeague && m.hasSufficientStats) && m.hasSufficientStats)
+            .filter(m => !m.isPopularTopLeague && !m.isSecondaryLeague && m.hasSufficientStats)
             .sort(sortByConfidenceThenTime);
 
         const fallbackRemainingPicks = evaluatedMatches
@@ -1625,6 +1715,9 @@ ${matchDescriptions}`;
             .sort(sortByConfidenceThenTime);
 
         let finalSlipMatches = [...popularPicks];
+        if (finalSlipMatches.length < maxGames) {
+            finalSlipMatches = [...finalSlipMatches, ...secondaryWithStatsPicks].slice(0, maxGames);
+        }
         if (finalSlipMatches.length < maxGames) {
             finalSlipMatches = [...finalSlipMatches, ...fallbackWithStatsPicks].slice(0, maxGames);
         }

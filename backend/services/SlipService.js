@@ -9,16 +9,19 @@ class SlipService {
 
     static isTopLeague(leagueName) {
         if (!leagueName || this.isLowerDivisionOrUnpopular(leagueName)) return false;
+        const lowerName = leagueName.toLowerCase();
+        if (lowerName.includes('afc champions league') || lowerName.includes('caf champions league')) {
+            return false;
+        }
         const topLeagues = [
             'premier league', 'epl', 'la liga', 'primera división', 'serie a', 'bundesliga',
             'ligue 1', 'champions league', 'europa league', 'conference league',
-            'eredivisie', 'primeira liga', 'liga portugal', 'premiership',
+            'eredivisie', 'eerste divisie', 'primeira liga', 'liga portugal', 'premiership',
+            'championship', 'segunda división', '2. bundesliga', 'serie b', 'ligue 2',
             'super lig', 'süper lig', 'pro league', 'superliga', 'eliteserien',
             'allsvenskan', 'super league', 'hnl', 'chance liga', 'ekstraklasa',
-            'liga i', 'first league', 'liga profesional', 'brasileiro', 'mls', 'liga mx',
-            'fa cup', 'efl cup', 'league cup', 'dfb pokal', 'copa del rey', 'coppa italia'
+            'fa cup', 'efl cup', 'league cup', 'dfb pokal', 'copa del rey', 'coppa italia', 'knvb beker'
         ];
-        const lowerName = leagueName.toLowerCase();
         return topLeagues.some(l => lowerName.includes(l));
     }
 
