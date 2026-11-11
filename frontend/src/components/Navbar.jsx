@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Moon, Sun, Activity, Clock, Home, Users, Bot, 
-  User, Calendar, Menu, X, Flame, TrendingUp, ChevronRight 
+  User, Calendar, Menu, X, Flame, TrendingUp, ChevronRight, Globe 
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -11,6 +11,7 @@ const NAV_SECTIONS = [
     items: [
       { path: '/', label: 'Home', desc: 'All fixtures & custom bet slip builder', icon: Home, color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60' },
       { path: '/todays-games', label: "Today's Games", desc: 'Match stats & pre-game analytics', icon: Calendar, color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60' },
+      { path: '/international-games', label: 'International', desc: 'National team fixtures, qualifiers & friendlies', icon: Globe, color: 'text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/60' },
       { path: '/live-stats', label: 'Live Stats', desc: 'In-play momentum & real-time monitoring', icon: Activity, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60', isLive: true },
     ]
   },

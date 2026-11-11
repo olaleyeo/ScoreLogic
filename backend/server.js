@@ -455,6 +455,41 @@ app.post('/api/matches/today/generate-slip', async (req, res) => {
     }
 });
 
+app.get('/api/matches/international', async (req, res) => {
+    try {
+        const { date, days, timezone } = req.query;
+        const AiPrematchService = require('./services/AiPrematchService');
+        const result = await AiPrematchService.getInternationalMatches({
+            date,
+            days: days ? Number(days) : 9,
+            timezone
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching international matches:', error.message);
+        res.status(500).json({ error: 'Failed to fetch international matches' });
+    }
+});
+
+app.post('/api/matches/international/generate-slip', async (req, res) => {
+    try {
+        const { date, days, filterDate, competitionId, minConfidence, maxGames } = req.body || {};
+        const AiPrematchService = require('./services/AiPrematchService');
+        const result = await AiPrematchService.generateInternationalAiSlip({
+            date,
+            days: days ? Number(days) : 9,
+            filterDate,
+            competitionId,
+            minConfidence,
+            maxGames: maxGames || 20
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('Error generating International AI slip:', error.message);
+        res.status(500).json({ error: error.message || 'Failed to generate International AI slip' });
+    }
+});
+
 app.get('/api/sofascore/search', async (req, res) => {
     try {
         const axios = require('axios');

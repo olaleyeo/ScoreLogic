@@ -10,6 +10,7 @@ import AiPrematch from './pages/AiPrematch';
 import LiveStats from './pages/LiveStats';
 import PlayerStats from './pages/PlayerStats';
 import TodaysGames from './pages/TodaysGames';
+import InternationalGames from './pages/InternationalGames';
 
 function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -42,6 +43,7 @@ function App() {
           <Route path="/live-stats" element={<LiveStats />} />
           <Route path="/player-stats" element={<PlayerStats />} />
           <Route path="/todays-games" element={<TodaysGames />} />
+          <Route path="/international-games" element={<InternationalGames />} />
         </Routes>
       </div>
     </BrowserRouter>

@@ -1349,7 +1349,7 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
 
     static async evaluateCandidatesWithAi(
         prioritizedCandidates,
-        { vaultOddsMap, teamScheduleMap, minConfidence = 70, maxGames = 20, apiKey, groqKey }
+        { vaultOddsMap, teamScheduleMap, minConfidence = 70, maxGames = 20, apiKey, groqKey, isInternationalMode = false }
     ) {
         // Enrich up to 20 uncached fixtures in parallel so the AI has verified API-Sports statistics for every candidate
         const uncachedTop = prioritizedCandidates
@@ -1426,7 +1426,9 @@ Do NOT use markdown asterisks. Format your response cleanly using plain text and
                 Object.assign(availableOdds, item._mockOdds);
             }
 
-            const leagueMeta = this.classifyFixtureLeagueAndStats(item, vaultOddsMap);
+            const leagueMeta = isInternationalMode
+                ? this.classifyInternationalFixture(item, vaultOddsMap)
+                : this.classifyFixtureLeagueAndStats(item, vaultOddsMap);
 
             return {
                 matchId,
@@ -1732,6 +1734,427 @@ ${matchDescriptions}`;
             matches: finalSlipMatches,
             totalEvaluated: preparedMatches.length
         };
+    }
+
+    /**
+     * Strictly verifies whether a fixture is a Senior National Team match
+     * (including International Friendlies and major/continental national tournaments).
+     * Rejects all club fixtures (including Club Friendlies, Champions League, etc.)
+     * and all Youth (U15-U23), Olympic, Reserve, or Women's fixtures.
+     */
+    static isNationalTeamFixture(item) {
+        if (!item) return false;
+        const leagueId = Number(item?.league?.id || 0);
+        const country = (item?.league?.country || '').trim().toLowerCase();
+        const leagueName = (item?.league?.name || '').trim().toLowerCase();
+        const homeName = (item?.teams?.home?.name || '').trim();
+        const awayName = (item?.teams?.away?.name || '').trim();
+
+        if (!homeName || !awayName) return false;
+
+        // 1. All national team competitions in API-Football are categorized under 'World'
+        if (country && country !== 'world') return false;
+
+        // 2. Explicitly reject all international club competitions (e.g. Friendlies Clubs 667, UCL 2, UEL 3, UECL 848, Libertadores 13, AFC CL 17, Club World Cup 15)
+        const EXCLUDED_CLUB_LEAGUE_IDS = new Set([
+            2, 3, 848, 11, 12, 13, 15, 16, 17, 18, 20, 26, 27,
+            525, 531, 541, 667, 849, 940, 1164, 1186, 1191
+        ]);
+        if (EXCLUDED_CLUB_LEAGUE_IDS.has(leagueId)) return false;
+
+        if (
+            /\b(clubs?|champions league|europa league|conference league|europa cup|libertadores|sudamericana|club world cup|recopa|super cup|youth league|premier league international|viable|trophy|shield|algarve|pinatar|shebelieves|tournoi|universiade|military|conifa|island games)\b/i.test(
+                leagueName
+            )
+        ) {
+            return false;
+        }
+
+        // 3. Reject Youth (U14-U23), Olympic, Reserves, and Women's matches in either league name or team names
+        const combinedText = `${leagueName} ${homeName} ${awayName}`;
+        if (
+            /\b(u14|u15|u16|u17|u18|u19|u20|u21|u22|u23|under-?\d+|youth|junior|olympic|women|woman|ladies|female|femenino|femenina|feminin|feminine|frauen|reserves|reserve|amateur)\b/i.test(
+                combinedText
+            )
+        ) {
+            return false;
+        }
+
+        if (/(\s+w|\s+ii|\s+b|\(w\))$/i.test(homeName) || /(\s+w|\s+ii|\s+b|\(w\))$/i.test(awayName)) {
+            return false;
+        }
+
+        // 4. Reject any team name with club designators
+        const clubTeamPattern = /\b(fc|sc|cf|ac|as|sk|fk|bk|if|ik|bv|sv|vfb|vfl|rb|cd|ud|sd|ad|ca|cr|se|ec|cs|us|ss|ssc|aj|rc|ogc|osc|bsc|krc|kaa|kv|kvc|rsc|paok|aek|ofi|united|city|rovers|wanderers|athletic|atletico|atlético|sporting|real|deportivo|dynamo|dinamo|lokomotiv|spartak|cska|zenit|shakhtar|partizan|steaua|fcsb|rapid|cfr|botosani|farul|ludogorets|levski|slavia|sparta|viktoria|slovan|ferencvaros|legia|lech|rakow|raków|pogon|jagiellonia|olympiacos|panathinaikos|galatasaray|fenerbahce|besiktas|trabzonspor|al-ahli|al-hilal|al-nassr|al-ittihad|al-sadd|al-gharafa|zamalek|wydad|esperance|mamelodi|boca|river|racing|independiente|flamengo|palmeiras|botafogo|corinthians|santos|gremio|cruzeiro|internacional|monterrey|tigres|cruz azul|pachuca|toluca|guadalajara)\b/i;
+        if (clubTeamPattern.test(homeName) || clubTeamPattern.test(awayName)) {
+            return false;
+        }
+
+        // 5. Must be a recognized Senior National Team tournament or International Friendly (id: 10)
+        const NATIONAL_TEAM_LEAGUE_IDS = new Set([
+            1,    // World Cup
+            4,    // Euro Championship
+            5,    // UEFA Nations League
+            6,    // Africa Cup of Nations
+            7,    // Asian Cup
+            9,    // Copa America
+            10,   // Friendlies (Senior International Friendlies)
+            19,   // African Nations Championship (CHAN)
+            21,   // Confederations Cup
+            22,   // CONCACAF Gold Cup
+            23,   // EAFF E-1 Football Championship
+            24,   // AFF Championship
+            25,   // Gulf Cup of Nations
+            28,   // SAFF Championship
+            29,   // World Cup - Qualification Africa
+            30,   // World Cup - Qualification Asia
+            31,   // World Cup - Qualification CONCACAF
+            32,   // World Cup - Qualification Europe
+            33,   // World Cup - Qualification Oceania
+            34,   // World Cup - Qualification South America
+            35,   // Asian Cup - Qualification
+            36,   // Africa Cup of Nations - Qualification
+            37,   // World Cup - Qualification Intercontinental Play-offs
+            536,  // CONCACAF Nations League
+            858,  // CONCACAF Gold Cup - Qualification
+            913,  // CONMEBOL-UEFA Finalissima
+            960   // Euro Championship - Qualification
+        ]);
+
+        if (NATIONAL_TEAM_LEAGUE_IDS.has(leagueId)) {
+            return true;
+        }
+
+        return /\b(world cup|nations league|euro championship|european championship|copa america|africa cup of nations|african nations|asian cup|gold cup|friendlies|friendly international|international friendlies|confederations cup|saff|eaff|aff championship|gulf cup|cosafa|cecafa|waff|finalissima)\b/i.test(
+            leagueName
+        );
+    }
+
+    /**
+     * Classifies a National Team fixture by tournament prestige and team statistical depth
+     * so major qualifiers, Nations League, and top-nation International Friendlies are prioritized
+     * ahead of obscure regional fixtures without sufficient data.
+     */
+    static classifyInternationalFixture(item, vaultOddsMap = new Map()) {
+        const leagueId = Number(item?.league?.id || 0);
+        const leagueName = (item?.league?.name || '').toLowerCase();
+        const homeName = (item?.teams?.home?.name || '').toLowerCase();
+        const awayName = (item?.teams?.away?.name || '').toLowerCase();
+        const matchId = String(item?.fixture?.id || '');
+
+        // Elite Competitive International Tournaments & Qualifiers
+        const ELITE_COMPETITIVE_IDS = new Set([
+            1, 4, 5, 6, 7, 9, 21, 22, 29, 30, 31, 32, 34, 35, 36, 37, 536, 913, 960
+        ]);
+
+        // Major FIFA Nations with rich historical statistics for International Friendlies (id: 10)
+        const MAJOR_FOOTBALL_NATIONS = new Set([
+            'england', 'france', 'spain', 'germany', 'italy', 'netherlands', 'portugal', 'belgium',
+            'croatia', 'switzerland', 'denmark', 'austria', 'poland', 'turkey', 'turkiye', 'serbia',
+            'ukraine', 'sweden', 'norway', 'scotland', 'wales', 'czechia', 'czech republic', 'hungary',
+            'romania', 'greece', 'slovakia', 'slovenia', 'finland', 'ireland', 'republic of ireland',
+            'northern ireland', 'iceland', 'bosnia & herzegovina', 'georgia', 'albania', 'north macedonia',
+            'montenegro', 'israel', 'russia',
+            'brazil', 'argentina', 'uruguay', 'colombia', 'chile', 'ecuador', 'peru', 'paraguay',
+            'venezuela', 'bolivia',
+            'usa', 'mexico', 'canada', 'panama', 'costa rica', 'jamaica', 'honduras',
+            'morocco', 'senegal', 'nigeria', 'egypt', 'algeria', 'tunisia', 'ivory coast', "cote d'ivoire",
+            'cameroon', 'ghana', 'mali', 'south africa', 'burkina faso', 'dr congo', 'guinea',
+            'japan', 'south korea', 'korea republic', 'australia', 'iran', 'ir iran', 'saudi arabia',
+            'qatar', 'uzbekistan', 'iraq', 'united arab emirates', 'jordan', 'oman', 'bahrain', 'china', 'new zealand'
+        ]);
+
+        const hasMajorNation = MAJOR_FOOTBALL_NATIONS.has(homeName) || MAJOR_FOOTBALL_NATIONS.has(awayName);
+        const bothMajorNations = MAJOR_FOOTBALL_NATIONS.has(homeName) && MAJOR_FOOTBALL_NATIONS.has(awayName);
+
+        let prestigeRank = 3;
+        if (ELITE_COMPETITIVE_IDS.has(leagueId) && hasMajorNation) {
+            prestigeRank = 1;
+        } else if (leagueId === 10 && bothMajorNations) {
+            // High-profile Senior International Friendly between two major nations (e.g., Colombia vs Chile, Ecuador vs Costa Rica, Saudi Arabia vs South Korea)
+            prestigeRank = 1;
+        } else if (ELITE_COMPETITIVE_IDS.has(leagueId) || (leagueId === 10 && hasMajorNation)) {
+            prestigeRank = 2;
+        } else {
+            prestigeRank = 3;
+        }
+
+        const isPopularTopLeague = prestigeRank === 1 || prestigeRank === 2;
+        const isSecondaryLeague = prestigeRank === 3;
+        const hasVaultOdds = vaultOddsMap.has(matchId) || Boolean(item._mockOdds);
+        const cachedEnrich = this.enrichmentCache?.[matchId]?.data;
+        const hasCachedApiStats = Boolean(
+            cachedEnrich &&
+                (cachedEnrich.homeRecord !== 'N/A' ||
+                    cachedEnrich.homeForm !== 'N/A' ||
+                    cachedEnrich.h2hSummary !== 'N/A')
+        );
+
+        const hasSufficientStats = hasVaultOdds || hasCachedApiStats || isPopularTopLeague;
+
+        return {
+            tier: prestigeRank,
+            prestigeRank,
+            isPopularTopLeague,
+            isSecondaryLeague,
+            isLowerOrUnpopular: prestigeRank > 3,
+            isYouthOrFriendly: false,
+            hasSufficientStats,
+            hasVaultOdds,
+            hasCachedApiStats
+        };
+    }
+
+    /**
+     * Fetches National Team fixtures across the upcoming International Window
+     * (default 9 days starting from `startDate`) or for a specific date.
+     * Only populates when international national-team fixtures (including friendlies) exist.
+     */
+    static async getInternationalMatches(options = {}) {
+        const apiKey = process.env.API_FOOTBALL_KEY;
+        const startDate = options.date || new Date().toISOString().split('T')[0];
+        const days = Math.min(Math.max(Number(options.days) || 8, 1), 14);
+
+        const baseDate = new Date(`${startDate}T00:00:00Z`);
+        const windowDates = [];
+        for (let i = 0; i < days; i++) {
+            const d = new Date(baseDate);
+            d.setUTCDate(d.getUTCDate() + i);
+            windowDates.push(d.toISOString().split('T')[0]);
+        }
+
+        if (!apiKey || apiKey === 'your_api_key_here') {
+            return {
+                matches: [],
+                windowStart: windowDates[0],
+                windowEnd: windowDates[windowDates.length - 1],
+                datesWithGames: [],
+                competitions: [],
+                activeWindow: false
+            };
+        }
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        let rawFixtures = [];
+        for (let i = 0; i < windowDates.length; i += 4) {
+            const batchDates = windowDates.slice(i, i + 4);
+            const batchResults = await Promise.all(
+                batchDates.map(d =>
+                    this.fetchFixturesForDateCached(d, apiKey).catch(err => {
+                        console.error(`Error fetching international fixtures for ${d}:`, err.message);
+                        return [];
+                    })
+                )
+            );
+            batchResults.forEach(arr => {
+                rawFixtures = rawFixtures.concat(arr);
+            });
+            if (i + 4 < windowDates.length) {
+                await sleep(100);
+            }
+        }
+
+        // Deduplicate by fixture ID and filter strictly to Senior National Team matches
+        const seenIds = new Set();
+        const nationalMatches = [];
+        for (const item of rawFixtures) {
+            const fId = String(item?.fixture?.id || '');
+            if (!fId || seenIds.has(fId)) continue;
+            if (!this.isNationalTeamFixture(item)) continue;
+            seenIds.add(fId);
+            nationalMatches.push(item);
+        }
+
+        // Sort: Live first, then upcoming chronologically, then finished
+        const liveStatuses = ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE'];
+        nationalMatches.sort((a, b) => {
+            const isLiveA = liveStatuses.includes(a.fixture?.status?.short);
+            const isLiveB = liveStatuses.includes(b.fixture?.status?.short);
+            if (isLiveA && !isLiveB) return -1;
+            if (!isLiveA && isLiveB) return 1;
+            return new Date(a.fixture.date) - new Date(b.fixture.date);
+        });
+
+        const datesWithGames = Array.from(
+            new Set(
+                nationalMatches
+                    .map(m => (m.fixture?.date ? m.fixture.date.split('T')[0] : null))
+                    .filter(Boolean)
+            )
+        ).sort();
+
+        const competitions = Array.from(
+            new Map(
+                nationalMatches.map(m => [
+                    m.league.id,
+                    {
+                        id: m.league.id,
+                        name: m.league.name,
+                        logo: m.league.logo
+                    }
+                ])
+            ).values()
+        );
+
+        return {
+            matches: nationalMatches,
+            windowStart: windowDates[0],
+            windowEnd: windowDates[windowDates.length - 1],
+            datesWithGames,
+            competitions,
+            activeWindow: nationalMatches.length > 0
+        };
+    }
+
+    /**
+     * Generates an AI International Slip (capped at max 20 games) exclusively from
+     * Senior National Team fixtures (including International Friendlies).
+     */
+    static async generateInternationalAiSlip(options = {}) {
+        const apiKey = process.env.API_FOOTBALL_KEY;
+        const groqKey = process.env.GROQ_API_KEY;
+        if (!groqKey) {
+            throw new Error('GROQ_API_KEY is missing in backend .env');
+        }
+
+        const minConfidence = Number(options.minConfidence) || 70;
+        const maxGames = Number(options.maxGames) || 20;
+        const startDate = options.date || new Date().toISOString().split('T')[0];
+        const days = Math.min(Math.max(Number(options.days) || 8, 1), 14);
+        const filterDate = options.filterDate || 'all'; // 'all' or specific YYYY-MM-DD
+        const competitionId = options.competitionId ? Number(options.competitionId) : null;
+
+        const intlData = await this.getInternationalMatches({ date: startDate, days });
+        let allNationalFixtures = intlData.matches || [];
+
+        if (allNationalFixtures.length === 0) {
+            return { matches: [], totalEvaluated: 0 };
+        }
+
+        // Build schedule map across the full international window so AI knows if a nation has another match 3 days later (rotation risk in friendlies/Nations League)
+        const teamScheduleMap = new Map();
+        const addTeamSchedule = (teamName, fixtureObj) => {
+            if (!teamName) return;
+            const key = teamName.toLowerCase();
+            if (!teamScheduleMap.has(key)) teamScheduleMap.set(key, []);
+            teamScheduleMap.get(key).push(fixtureObj);
+        };
+
+        allNationalFixtures.forEach(item => {
+            const hName = item.teams?.home?.name;
+            const aName = item.teams?.away?.name;
+            const fDate = item.fixture?.date;
+            if (!hName || !aName || !fDate) return;
+            const summary = {
+                id: String(item.fixture.id),
+                date: fDate,
+                league: item.league?.name || 'International',
+                round: item.league?.round || '',
+                home: hName,
+                away: aName
+            };
+            addTeamSchedule(hName, summary);
+            addTeamSchedule(aName, summary);
+        });
+
+        for (const [, sched] of teamScheduleMap.entries()) {
+            sched.sort((a, b) => new Date(a.date) - new Date(b.date));
+        }
+
+        // Filter by user-selected date or competition if requested
+        let filteredPool = allNationalFixtures;
+        if (filterDate && filterDate !== 'all') {
+            filteredPool = filteredPool.filter(m => (m.fixture?.date || '').startsWith(filterDate));
+        }
+        if (competitionId) {
+            filteredPool = filteredPool.filter(m => Number(m.league?.id) === competitionId);
+        }
+
+        // Filter to upcoming/not-started fixtures first
+        const now = new Date();
+        let eligibleFixtures = filteredPool.filter(item => {
+            const short = item.fixture?.status?.short;
+            if (!['NS', 'TBD'].includes(short)) return false;
+            const kickoff = item.fixture?.date ? new Date(item.fixture.date) : null;
+            return !kickoff || kickoff > now;
+        });
+
+        if (eligibleFixtures.length < 6) {
+            eligibleFixtures = filteredPool.filter(item => {
+                const short = item.fixture?.status?.short;
+                return !['CANC', 'PST', 'ABD', 'AWD', 'WO'].includes(short);
+            });
+        }
+
+        if (eligibleFixtures.length === 0) {
+            return { matches: [], totalEvaluated: 0 };
+        }
+
+        // Lookup VaultMatch bookmaker odds if any exist for these dates
+        const { VaultMatch } = require('../database');
+        const vaultOddsMap = new Map();
+        try {
+            if (intlData.datesWithGames.length > 0) {
+                const vaultRows = await VaultMatch.findAll({
+                    where: { date: intlData.datesWithGames }
+                });
+                vaultRows.forEach(row => {
+                    try {
+                        const parsed = JSON.parse(row.rawData);
+                        if (parsed && parsed.matchId) {
+                            vaultOddsMap.set(String(parsed.matchId), parsed);
+                        }
+                    } catch (_) {}
+                });
+            }
+        } catch (err) {
+            console.error('Vault lookup warning (international):', err.message);
+        }
+
+        // Classify and rank by International Prestige (Rank 1 & 2 major tournaments/nations before Rank 3 regional matches)
+        const classified = eligibleFixtures.map(item => ({
+            item,
+            meta: this.classifyInternationalFixture(item, vaultOddsMap)
+        }));
+
+        classified.sort((a, b) => {
+            if (a.meta.prestigeRank !== b.meta.prestigeRank) return a.meta.prestigeRank - b.meta.prestigeRank;
+            return new Date(a.item.fixture.date) - new Date(b.item.fixture.date);
+        });
+
+        const topInternational = classified.filter(c => c.meta.isPopularTopLeague).map(c => c.item);
+        const secondaryInternational = classified.filter(c => !c.meta.isPopularTopLeague).map(c => c.item);
+
+        // Only include obscure/regional Rank 3 international games if Rank 1+2 major international games have < 20 matches
+        const orderedPool =
+            topInternational.length >= 20
+                ? topInternational
+                : [...topInternational, ...secondaryInternational];
+
+        // Cap at max 2 matches per national team across the window so one team doesn't dominate
+        const teamCountMap = new Map();
+        const prioritizedCandidates = [];
+        for (const item of orderedPool) {
+            if (prioritizedCandidates.length >= 40) break;
+            const hKey = (item.teams?.home?.name || '').toLowerCase();
+            const aKey = (item.teams?.away?.name || '').toLowerCase();
+            const hCount = teamCountMap.get(hKey) || 0;
+            const aCount = teamCountMap.get(aKey) || 0;
+            if (hCount >= 2 && aCount >= 2) continue;
+            prioritizedCandidates.push(item);
+            teamCountMap.set(hKey, hCount + 1);
+            teamCountMap.set(aKey, aCount + 1);
+        }
+
+        return this.evaluateCandidatesWithAi(prioritizedCandidates, {
+            vaultOddsMap,
+            teamScheduleMap,
+            minConfidence,
+            maxGames,
+            apiKey,
+            groqKey,
+            isInternationalMode: true
+        });
     }
 }
 
